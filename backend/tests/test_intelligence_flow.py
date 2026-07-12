@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
 from datetime import UTC, datetime
 from typing import Any
 
@@ -24,7 +23,6 @@ from backend.app.services.signal_decision import SignalDecisionService
 from backend.app.services.topic_normalization import TopicNormalizationService
 from backend.app.utils.events import InMemoryDecisionEventEmitter, SignalDetected
 from backend.app.workers import tasks as worker_tasks
-from backend.tests.fixtures.google_trends import MALFORMED_TREND, trend_payloads
 
 
 class _FakePostgresConnection:
@@ -241,49 +239,50 @@ def test_api_endpoints_return_persisted_data(session: Any) -> None:
 
     _override_session(session)
     try:
-        client = TestClient(app)
+        with TestClient(app) as client:
+            signals_response = client.get("/api/v1/signals")
+            assert signals_response.status_code == 200
+            assert len(signals_response.json()) == 2
 
-        signals_response = client.get("/api/v1/signals")
-        assert signals_response.status_code == 200
-        assert len(signals_response.json()) == 2
+            signal_detail = client.get(f"/api/v1/signals/{first_result.signal.id}")
+            assert signal_detail.status_code == 200
+            assert signal_detail.json()["topic_name"] == "Ancient Egypt"
 
-        signal_detail = client.get(f"/api/v1/signals/{first_result.signal.id}")
-        assert signal_detail.status_code == 200
-        assert signal_detail.json()["topic_name"] == "Ancient Egypt"
+            decisions_response = client.get("/api/v1/decisions")
+            assert decisions_response.status_code == 200
+            assert len(decisions_response.json()) == 2
 
-        decisions_response = client.get("/api/v1/decisions")
-        assert decisions_response.status_code == 200
-        assert len(decisions_response.json()) == 2
+            decision_detail = client.get(
+                f"/api/v1/decisions/{first_result.decision.id}"
+            )
+            assert decision_detail.status_code == 200
+            assert decision_detail.json()["evidence"]
 
-        decision_detail = client.get(f"/api/v1/decisions/{first_result.decision.id}")
-        assert decision_detail.status_code == 200
-        assert decision_detail.json()["evidence"]
+            topic_response = client.get("/api/v1/topics")
+            assert topic_response.status_code == 200
+            assert len(topic_response.json()) == 2
 
-        topic_response = client.get("/api/v1/topics")
-        assert topic_response.status_code == 200
-        assert len(topic_response.json()) == 2
+            topic_detail = client.get(f"/api/v1/topics/{first_result.topic.id}")
+            assert topic_detail.status_code == 200
+            assert topic_detail.json()["normalized_key"] == "ancient egypt"
 
-        topic_detail = client.get(f"/api/v1/topics/{first_result.topic.id}")
-        assert topic_detail.status_code == 200
-        assert topic_detail.json()["normalized_key"] == "ancient egypt"
+            topic_decisions = client.get(
+                f"/api/v1/topics/{first_result.topic.id}/decisions"
+            )
+            assert topic_decisions.status_code == 200
+            assert len(topic_decisions.json()) == 1
 
-        topic_decisions = client.get(
-            f"/api/v1/topics/{first_result.topic.id}/decisions"
-        )
-        assert topic_decisions.status_code == 200
-        assert len(topic_decisions.json()) == 1
+            paginated = client.get("/api/v1/decisions?limit=1&offset=1")
+            assert paginated.status_code == 200
+            assert len(paginated.json()) == 1
 
-        paginated = client.get("/api/v1/decisions?limit=1&offset=1")
-        assert paginated.status_code == 200
-        assert len(paginated.json()) == 1
+            empty_page = client.get("/api/v1/decisions?limit=1&offset=99")
+            assert empty_page.status_code == 200
+            assert empty_page.json() == []
 
-        empty_page = client.get("/api/v1/decisions?limit=1&offset=99")
-        assert empty_page.status_code == 200
-        assert empty_page.json() == []
-
-        assert client.get("/api/v1/decisions/missing").status_code == 404
-        assert client.get("/api/v1/signals/missing").status_code == 404
-        assert client.get("/api/v1/topics/missing").status_code == 404
+            assert client.get("/api/v1/decisions/missing").status_code == 404
+            assert client.get("/api/v1/signals/missing").status_code == 404
+            assert client.get("/api/v1/topics/missing").status_code == 404
     finally:
         _clear_overrides()
 
@@ -295,7 +294,8 @@ def test_readiness_endpoint_success(monkeypatch: pytest.MonkeyPatch) -> None:
     )
     monkeypatch.setattr("backend.app.services.readiness.Redis", _HealthyRedis)
 
-    response = TestClient(app).get("/ready")
+    with TestClient(app) as client:
+        response = client.get("/ready")
 
     assert response.status_code == 200
     assert response.json() == {"status": "ready", "postgres": "ok", "redis": "ok"}
@@ -314,7 +314,8 @@ def test_readiness_endpoint_postgres_failure(
     )
     monkeypatch.setattr("backend.app.services.readiness.Redis", _HealthyRedis)
 
-    response = TestClient(app).get("/ready")
+    with TestClient(app) as client:
+        response = client.get("/ready")
 
     assert response.status_code == 503
     assert response.json() == {
@@ -333,7 +334,8 @@ def test_readiness_endpoint_redis_failure(
     )
     monkeypatch.setattr("backend.app.services.readiness.Redis", _UnhealthyRedis)
 
-    response = TestClient(app).get("/ready")
+    with TestClient(app) as client:
+        response = client.get("/ready")
 
     assert response.status_code == 503
     assert response.json() == {
@@ -396,47 +398,35 @@ def test_process_signal_detected_task_rejects_validation_failure(
 def test_poll_google_trends_skips_malformed_items_and_emits_one_event(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    class _FakeConnector:
-        def fetch(self, **kwargs: Any) -> list[Mapping[str, Any]]:
-            return list(trend_payloads()) + [MALFORMED_TREND]
+    reports: list[dict[str, Any]] = []
 
-        def validate(self, raw_content: Mapping[str, Any]) -> None:
-            if not raw_content.get("title"):
-                raise ValueError("invalid trend")
+    def fake_run(self: Any, connector_kwargs: Any, *, enabled_connectors: Any) -> Any:
+        reports.append(
+            {
+                "connector_kwargs": connector_kwargs,
+                "enabled_connectors": enabled_connectors,
+            }
+        )
 
-        def normalize(self, raw_content: Mapping[str, Any]) -> TrendSignal:
-            return TrendSignal(
-                source="google_trends",
-                score=1.0,
-                confidence=1.0,
-                timestamp=datetime(2026, 1, 1, tzinfo=UTC),
-                reason=(
-                    "Google Trends reported increasing search interest for "
-                    f"{raw_content['title']} in US."
-                ),
-            )
+        class _Report:
+            started_at = datetime(2026, 1, 1, tzinfo=UTC)
+            completed_at = datetime(2026, 1, 1, tzinfo=UTC)
+            duration_ms = 1
+            connector_reports = ()
 
-    class _Registry:
-        def get(self, name: str) -> _FakeConnector:
-            return _FakeConnector()
+        return _Report()
 
-    emitted: list[dict[str, Any]] = []
     monkeypatch.setattr(
-        worker_tasks, "build_default_connector_registry", lambda: _Registry()
-    )
-    monkeypatch.setattr(
-        worker_tasks.process_signal_detected,
-        "delay",
-        lambda payload: emitted.append(payload),
-    )
-    monkeypatch.setattr(
-        worker_tasks.poll_google_trends,
-        "retry",
-        lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("retry requested")),
+        "backend.app.services.connector_orchestrator.ConnectorOrchestrator.run",
+        fake_run,
     )
 
     result = worker_tasks.poll_google_trends.run(geo="US", limit=3)
 
-    assert result["signals_fetched"] == 3
-    assert result["signals_emitted"] == 2
-    assert len(emitted) == 2
+    assert reports == [
+        {
+            "connector_kwargs": {"google_trends": {"geo": "US", "limit": 3}},
+            "enabled_connectors": ("google_trends",),
+        }
+    ]
+    assert result["duration_ms"] == 1

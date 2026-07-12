@@ -43,7 +43,11 @@ def session() -> Session:
         poolclass=StaticPool,
     )
     Base.metadata.create_all(engine)
-    session_factory = sessionmaker(bind=engine)
-    with session_factory() as database_session:
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+    database_session = session_factory()
+    try:
         yield database_session
-    Base.metadata.drop_all(engine)
+    finally:
+        database_session.close()
+        Base.metadata.drop_all(engine)
+        engine.dispose()

@@ -1,6 +1,10 @@
 """Pure domain objects independent of infrastructure."""
 
 from backend.app.domain.analysis_result import AnalysisResult
+from backend.app.domain.connector_orchestration import (
+    ConnectorExecutionReport,
+    ConnectorOrchestrationReport,
+)
 from backend.app.domain.content import Content
 from backend.app.domain.content_opportunity import ContentOpportunity
 from backend.app.domain.decision import Decision
@@ -14,6 +18,8 @@ from backend.app.domain.trend_signal import TrendSignal
 
 __all__ = [
     "AnalysisResult",
+    "ConnectorExecutionReport",
+    "ConnectorOrchestrationReport",
     "Content",
     "ContentOpportunity",
     "Decision",

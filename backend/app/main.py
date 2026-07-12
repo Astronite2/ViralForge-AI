@@ -1,6 +1,7 @@
 """FastAPI application entry point."""
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from backend.app.api.v1.content import router as content_router
 from backend.app.api.v1.decision import router as decision_router
@@ -16,7 +17,21 @@ from backend.app.core.config import settings
 
 def create_application() -> FastAPI:
     """Create the configured FastAPI application."""
-    application = FastAPI(title=settings.app_name)
+    application = FastAPI(
+        title=settings.app_name,
+    )
+
+    application.add_middleware(
+        CORSMiddleware,
+        allow_origins=[
+            "http://localhost:5173",
+            "http://127.0.0.1:5173",
+        ],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
     application.include_router(health_router)
     application.include_router(ready_router)
     application.include_router(content_router)
@@ -26,6 +41,7 @@ def create_application() -> FastAPI:
     application.include_router(signals_api_v1_router)
     application.include_router(decision_api_v1_router)
     application.include_router(topics_api_v1_router)
+
     return application
 
 
