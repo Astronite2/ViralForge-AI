@@ -56,13 +56,17 @@ def _normalized_payload(normalized: TrendSignal | Content) -> dict[str, object]:
 
 
 def _trend_signal_payload(signal: TrendSignal) -> dict[str, object]:
-    return {
+    payload: dict[str, object] = {
         "source": signal.source,
         "score": signal.score,
         "confidence": signal.confidence,
         "timestamp": signal.timestamp.isoformat(),
         "reason": signal.reason,
     }
+    metadata = getattr(signal, "metadata", None)
+    if isinstance(metadata, Mapping) and metadata:
+        payload["metadata"] = _json_safe(metadata)
+    return payload
 
 
 def _content_payload(content: Content) -> dict[str, object]:

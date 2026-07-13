@@ -85,6 +85,7 @@ class IntelligenceReadService:
             "correlation_id": signal.correlation_id,
             "created_at": signal.created_at,
             "raw_metadata": signal.raw_metadata,
+            "unified_signal": (signal.raw_metadata or {}).get("unified_signal"),
         }
         return TrendSignalRead.model_validate(payload)
 

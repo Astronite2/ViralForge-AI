@@ -37,6 +37,7 @@ from backend.app.domain.reasoning import (
 )
 from backend.app.domain.topic import Topic
 from backend.app.domain.trend_signal import TrendSignal
+from backend.app.domain.unified_signal import SignalType, UnifiedSignal
 
 __all__ = [
     "AnalysisResult",
@@ -71,4 +72,6 @@ __all__ = [
     "TopicRelationshipType",
     "SignalStrength",
     "TrendSignal",
+    "SignalType",
+    "UnifiedSignal",
 ]

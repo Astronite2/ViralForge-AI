@@ -144,12 +144,9 @@ def test_modified_signal_creates_new_observation_and_decision() -> None:
             counts_after_first = _counts(session)
 
         modified_item = {
-            "query": "Ancient Egypt",
-            "title": "Ancient Egypt",
-            "url": "https://trends.google.com/trends/explore?q=Ancient%20Egypt",
-            "published_at": demo._fixture_google_trends_item()["published_at"],
+            **demo._fixture_google_trends_item(),
             "rank": 2,
-            "geo": "US",
+            "interest_score": 95,
         }
         second = demo.run_demo(
             database_mode="configured",

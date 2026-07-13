@@ -37,6 +37,18 @@ class Settings(BaseSettings):
     processing_retry_delay_seconds: int = Field(default=30, ge=1, le=3600)
     polling_batch_size: int = Field(default=10, ge=1, le=1000)
     google_trends_poll_interval_minutes: int = Field(default=5, ge=1, le=1440)
+    google_trends_enabled: bool = True
+    google_trends_provider: str = "pytrends"
+    google_trends_default_geo: str = "US"
+    google_trends_default_timeframe: str = "today 7-d"
+    google_trends_max_results: int = Field(default=10, ge=1, le=100)
+    google_trends_retries: int = Field(default=2, ge=0, le=10)
+    google_trends_backoff_seconds: float = Field(default=1.0, ge=0.0, le=60.0)
+    google_trends_official_project_id: str | None = None
+    google_trends_official_credentials_file: str | None = None
+    google_trends_official_api_endpoint: str | None = None
+    google_trends_official_access_enabled: bool = False
+    connector_status_active_window_minutes: int = Field(default=60, ge=1, le=10080)
     decision_engine_version: str = "v1"
     event_version: str = "v1"
     opportunity_engine_version: str = "v1"
@@ -64,6 +76,8 @@ class Settings(BaseSettings):
     )
     neutral_factor_defaults: dict[str, float] = Field(
         default_factory=lambda: {
+            "trend_momentum": 50.0,
+            "audience_demand": 50.0,
             "revenue_potential": 50.0,
             "competition": 50.0,
             "evergreen": 50.0,

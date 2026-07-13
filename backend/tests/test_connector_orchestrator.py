@@ -300,3 +300,39 @@ def test_reingested_content_updates_existing_row(session: Any) -> None:
     assert stored is not None
     assert stored.title == "Updated"
     assert stored.metrics == {"view_count": 250.0}
+
+
+def test_multiple_connector_types_share_unified_orchestration(session: Any) -> None:
+    registry = ConnectorRegistry()
+    registry.register(
+        "google_trends",
+        _FakeSignalConnector(
+            raw_items=[
+                {
+                    "query": "Ancient Egypt",
+                    "title": "Ancient Egypt",
+                    "url": "https://example.com/trend",
+                    "published_at": datetime(2026, 1, 1, tzinfo=UTC),
+                    "rank": 1,
+                    "geo": "US",
+                }
+            ]
+        ),
+    )
+    registry.register(
+        "youtube",
+        _FakeContentConnector(
+            [{"id": "youtube:multi", "title": "Roman History", "view_count": 100}]
+        ),
+    )
+
+    report = ConnectorOrchestrator(
+        registry=registry, session_factory=lambda: session
+    ).run(enabled_connectors=("google_trends", "youtube"))
+
+    assert [item.status for item in report.connector_reports] == [
+        "success",
+        "success",
+    ]
+    assert len(DecisionRepository(session).list(10, 0)) == 2
+    assert ContentRepository(session).get("youtube:multi") is not None

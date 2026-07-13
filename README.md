@@ -27,6 +27,14 @@ Routes remain thin. They delegate orchestration to services, while repositories 
 An optional AI reasoning layer sits above the deterministic stack. It remains
 disabled unless `AI_*` configuration is provided.
 
+All connectors pass through the [Unified Signal Engine](docs/unified-signal-engine.md)
+before knowledge ingestion and deterministic evaluation. Existing connector and
+REST API contracts remain backward compatible.
+
+Google Trends transport selection and degraded runtime behavior are documented in
+the [Connector SDK guide](docs/connectors.md). The default pytrends provider is an
+experimental fallback; no data is fabricated when it is unavailable.
+
 ## Folder structure
 
 ```text

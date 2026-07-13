@@ -19,3 +19,4 @@ class TrendSignalRead(Schema):
     correlation_id: str
     created_at: datetime
     raw_metadata: dict[str, object] | None = None
+    unified_signal: dict[str, object] | None = None

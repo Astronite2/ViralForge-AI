@@ -282,6 +282,11 @@ class KnowledgeLayerService:
             "event_version": (
                 metadata.get("event_version") if metadata is not None else None
             ),
+            "unified_signal": (
+                KnowledgeLayerService._json_safe(metadata.get("unified_signal", {}))
+                if metadata is not None
+                else {}
+            ),
             "signal_score": round(signal.score * 100.0, 2),
             "signal_confidence": round(signal.confidence * 100.0, 2),
             "content": (

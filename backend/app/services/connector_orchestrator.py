@@ -11,10 +11,12 @@ from uuid import uuid4
 from sqlalchemy.orm import Session
 
 from backend.app.connectors.base import BaseConnector
+from backend.app.connectors.errors import ConnectorAvailabilityError
 from backend.app.connectors.registry import (
     ConnectorRegistry,
     build_default_connector_registry,
 )
+from backend.app.core.config import settings
 from backend.app.db.session import SessionLocal
 from backend.app.domain.connector_orchestration import (
     ConnectorExecutionReport,
@@ -23,7 +25,9 @@ from backend.app.domain.connector_orchestration import (
 from backend.app.domain.content import Content
 from backend.app.domain.trend_signal import TrendSignal
 from backend.app.repositories.content import ContentRepository
+from backend.app.services.connector_status import ConnectorStatusStore
 from backend.app.services.signal_decision import SignalDecisionService
+from backend.app.services.unified_signal_normalizer import UnifiedSignalNormalizer
 from backend.app.utils.events import SignalDetected
 from backend.app.utils.idempotency import stable_signal_event_id
 
@@ -38,9 +42,15 @@ class ConnectorOrchestrator:
         registry: ConnectorRegistry | None = None,
         *,
         session_factory: Callable[[], Session] | None = None,
+        signal_normalizer: UnifiedSignalNormalizer | None = None,
+        status_store: ConnectorStatusStore | None = None,
     ) -> None:
         self.registry = registry or build_default_connector_registry()
         self.session_factory = session_factory or SessionLocal
+        self.signal_normalizer = signal_normalizer or UnifiedSignalNormalizer()
+        self.status_store = status_store or ConnectorStatusStore(
+            use_redis=registry is None
+        )
 
     def run(
         self,
@@ -63,6 +73,10 @@ class ConnectorOrchestrator:
                 dict(kwargs_by_connector.get(connector_name, {})),
             )
             connector_reports.append(connector_report)
+            self.status_store.record(
+                connector_report,
+                completed_at=datetime.now(UTC),
+            )
 
         completed_at = datetime.now(UTC)
         duration_ms = int((time.perf_counter() - orchestration_started) * 1000)
@@ -88,8 +102,35 @@ class ConnectorOrchestrator:
                 "correlation_id": connector_correlation_id,
             },
         )
+        provider = getattr(connector, "provider_name", None)
+        provider_experimental = bool(getattr(connector, "provider_experimental", False))
         try:
             raw_items = connector.fetch(**kwargs)
+        except ConnectorAvailabilityError as exc:
+            duration_ms = int((time.perf_counter() - started_at) * 1000)
+            logger.warning(
+                "connector provider unavailable",
+                extra={
+                    "connector": connector_name,
+                    "provider": provider,
+                    "status": exc.report_status,
+                    "error_code": exc.error_code,
+                    "correlation_id": connector_correlation_id,
+                },
+            )
+            return ConnectorExecutionReport(
+                connector_name=connector_name,
+                status=exc.report_status,
+                items_fetched=0,
+                items_processed=0,
+                items_failed=0,
+                decisions_created=0,
+                duration_ms=duration_ms,
+                errors=(exc.safe_message,),
+                provider=provider,
+                provider_experimental=provider_experimental,
+                error_code=exc.error_code,
+            )
         except Exception as exc:
             duration_ms = int((time.perf_counter() - started_at) * 1000)
             logger.exception(
@@ -108,6 +149,9 @@ class ConnectorOrchestrator:
                 decisions_created=0,
                 duration_ms=duration_ms,
                 errors=(str(exc),),
+                provider=provider,
+                provider_experimental=provider_experimental,
+                error_code="unexpected_failure",
             )
 
         items_processed = 0
@@ -121,16 +165,34 @@ class ConnectorOrchestrator:
                 normalized = connector.normalize(raw_item)
                 signals = self._signals_for_normalized(normalized)
                 metadata = self._metadata_for_normalized(normalized, raw_item)
+                unified_signals = self.signal_normalizer.normalize(
+                    normalized,
+                    event_version=settings.event_version,
+                    correlation_id=connector_correlation_id,
+                    connector_metadata={"raw_item": dict(raw_item)},
+                )
+                if len(unified_signals) != len(signals):
+                    raise RuntimeError(
+                        "Unified normalization must preserve embedded signal count"
+                    )
                 processed_signals: list[tuple[SignalDetected, str, str, bool]] = []
                 with self.session_factory() as session:
                     with session.begin():
                         if isinstance(normalized, Content):
                             ContentRepository(session).save(normalized)
                         service = SignalDecisionService(session)
-                        for signal_index, signal in enumerate(signals):
+                        for signal_index, (signal, unified_signal) in enumerate(
+                            zip(signals, unified_signals, strict=True)
+                        ):
+                            event_metadata = {
+                                **metadata,
+                                "event_version": settings.event_version,
+                                "unified_signal": unified_signal.to_payload(),
+                            }
                             event = SignalDetected(
                                 signal=signal,
-                                metadata=metadata,
+                                unified_signal=unified_signal,
+                                metadata=event_metadata,
                                 event_id=self._event_id(
                                     connector_name,
                                     normalized,
@@ -195,6 +257,9 @@ class ConnectorOrchestrator:
             decisions_created=decisions_created,
             duration_ms=duration_ms,
             errors=tuple(errors),
+            provider=provider,
+            provider_experimental=provider_experimental,
+            error_code="item_failure" if errors else None,
         )
 
     @staticmethod

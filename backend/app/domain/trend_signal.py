@@ -1,7 +1,9 @@
 """Trend signal domain object."""
 
-from dataclasses import dataclass
+from collections.abc import Mapping
+from dataclasses import dataclass, field
 from datetime import datetime
+from typing import Any
 
 
 @dataclass(frozen=True, slots=True)
@@ -13,3 +15,4 @@ class TrendSignal:
     confidence: float
     timestamp: datetime
     reason: str
+    metadata: Mapping[str, Any] = field(default_factory=dict)

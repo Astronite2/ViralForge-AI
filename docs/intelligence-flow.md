@@ -179,7 +179,7 @@ python -m backend.scripts.demo_intelligence_flow --database-mode isolated
 
 ## Live polling
 
-Enable the Google Trends polling beat schedule by configuring the environment and running the `beat` service from Docker Compose. The connector remains non-scraping and uses its normal fetch/normalize path.
+Enable the Google Trends polling beat schedule by configuring the environment and running the `beat` service from Docker Compose. The connector uses pytrends through its normal fetch/normalize path.
 
 ## AI reasoning layer
 

@@ -3,6 +3,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from backend.app.api.v1.connectors import router as connectors_router
 from backend.app.api.v1.content import router as content_router
 from backend.app.api.v1.decision import router as decision_router
 from backend.app.api.v1.decisions_v1 import router as decision_api_v1_router
@@ -39,6 +40,7 @@ def create_application() -> FastAPI:
     application.include_router(ready_router)
     application.include_router(reasoning_router)
     application.include_router(content_router)
+    application.include_router(connectors_router)
     application.include_router(decision_router)
     application.include_router(opportunities_router)
     application.include_router(signals_router)

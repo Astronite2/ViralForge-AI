@@ -90,7 +90,7 @@ def run_demo(
     """Run the fixture-backed intelligence flow and verify persistence."""
     database = _build_database(database_mode, session_factory=session_factory)
     raw_item = raw_item or _fixture_google_trends_item()
-    connector = GoogleTrendsConnector(fetcher=lambda geo, limit: [])
+    connector = GoogleTrendsConnector(client_factory=lambda: object())  # type: ignore[arg-type]
     connector.validate(raw_item)
     signal = connector.normalize(raw_item)
     event_id = _stable_event_id(signal) if stable_event_id else str(uuid4())
@@ -163,12 +163,21 @@ def _build_database(
 
 def _fixture_google_trends_item() -> dict[str, Any]:
     return {
+        "id": "3aa817eb-c30a-50fc-a0f4-1e33a224ba1d",
         "query": "Ancient Egypt",
         "title": "Ancient Egypt",
         "url": "https://trends.google.com/trends/explore?q=Ancient%20Egypt",
+        "source_url": "https://trends.google.com/trends/explore?q=Ancient%20Egypt",
         "published_at": datetime(2026, 1, 1, tzinfo=UTC),
         "rank": 1,
         "geo": "US",
+        "trend_type": "daily_trending_searches",
+        "timeframe": "today 3-m",
+        "interest_score": 100,
+        "related_queries": [],
+        "related_topics": [],
+        "category": 0,
+        "language": "en-US",
     }
 
 

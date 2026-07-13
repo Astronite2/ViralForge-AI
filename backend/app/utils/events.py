@@ -10,6 +10,7 @@ from backend.app.core.config import settings
 from backend.app.domain.decision_calculated import DecisionCalculated
 from backend.app.domain.reasoning import ReasoningStatus
 from backend.app.domain.trend_signal import TrendSignal
+from backend.app.domain.unified_signal import UnifiedSignal
 
 
 @dataclass(frozen=True, slots=True)
@@ -22,10 +23,11 @@ class SignalDetected:
     occurred_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     correlation_id: str = field(default_factory=lambda: str(uuid4()))
     event_version: str = field(default_factory=lambda: settings.event_version)
+    unified_signal: UnifiedSignal | None = None
 
     def to_payload(self) -> dict[str, Any]:
         """Serialize the event for task payloads."""
-        return {
+        payload = {
             "event_id": self.event_id,
             "signal": {
                 "source": self.signal.source,
@@ -33,12 +35,16 @@ class SignalDetected:
                 "confidence": self.signal.confidence,
                 "timestamp": self.signal.timestamp.isoformat(),
                 "reason": self.signal.reason,
+                "metadata": dict(self.signal.metadata),
             },
             "metadata": self.metadata,
             "occurred_at": self.occurred_at.isoformat(),
             "correlation_id": self.correlation_id,
             "event_version": self.event_version,
         }
+        if self.unified_signal is not None:
+            payload["unified_signal"] = self.unified_signal.to_payload()
+        return payload
 
     @classmethod
     def from_payload(cls, payload: Mapping[str, Any]) -> "SignalDetected":
@@ -54,6 +60,12 @@ class SignalDetected:
                     str(signal_payload["timestamp"]).replace("Z", "+00:00")
                 ),
                 reason=str(signal_payload["reason"]),
+                metadata=dict(signal_payload.get("metadata", {})),
+            ),
+            unified_signal=(
+                UnifiedSignal.from_payload(payload["unified_signal"])
+                if isinstance(payload.get("unified_signal"), Mapping)
+                else None
             ),
             occurred_at=datetime.fromisoformat(
                 str(payload["occurred_at"]).replace("Z", "+00:00")

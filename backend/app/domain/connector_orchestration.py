@@ -18,6 +18,9 @@ class ConnectorExecutionReport:
     decisions_created: int
     duration_ms: int
     errors: tuple[str, ...] = field(default_factory=tuple)
+    provider: str | None = None
+    provider_experimental: bool = False
+    error_code: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

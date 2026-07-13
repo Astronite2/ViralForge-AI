@@ -30,6 +30,7 @@ from backend.app.services.knowledge_layer import (
     KnowledgeLayerService,
 )
 from backend.app.services.topic_normalization import TopicNormalizationService
+from backend.app.services.unified_signal_normalizer import UnifiedSignalNormalizer
 from backend.app.utils.events import DecisionEventEmitter, SignalDetected
 
 logger = logging.getLogger(__name__)
@@ -63,11 +64,13 @@ class SignalDecisionService:
         decision_engine: DecisionEngine | None = None,
         decision_config: DecisionConfig | None = None,
         event_emitter: DecisionEventEmitter | None = None,
+        signal_normalizer: UnifiedSignalNormalizer | None = None,
     ) -> None:
         self.session = session
         self.decision_engine = decision_engine or DecisionEngine()
         self.decision_config = decision_config or DecisionConfig()
         self.event_emitter = event_emitter
+        self.signal_normalizer = signal_normalizer or UnifiedSignalNormalizer()
         self.topic_repository = TopicRepository(session)
         self.trend_signal_repository = TrendSignalRepository(session)
         self.evidence_repository = EvidenceRepository(session)
@@ -91,8 +94,24 @@ class SignalDecisionService:
         has_outer_transaction = self.session.in_transaction()
         try:
             with self._transaction(has_outer_transaction):
-                topic_name = self._topic_candidate(event.signal.reason)
+                unified = self.signal_normalizer.normalize(
+                    event.unified_signal or event.signal,
+                    event_version=event.event_version,
+                    correlation_id=event.correlation_id,
+                    connector_metadata=event.metadata,
+                )[0]
+                topic_name = unified.topic_name or self._topic_candidate(unified.reason)
                 topic = self.topic_normalization.resolve(topic_name)
+                unified = replace(
+                    unified,
+                    topic_id=topic.id,
+                    topic_name=topic.display_name,
+                )
+                event_metadata = {
+                    **event.metadata,
+                    "event_version": event.event_version,
+                    "unified_signal": unified.to_payload(),
+                }
                 logger.info(
                     "topic resolved",
                     extra={
@@ -105,16 +124,21 @@ class SignalDecisionService:
                 signal = self.trend_signal_repository.create(
                     topic_id=topic.id,
                     content_id=self._content_id(event.metadata),
-                    source=event.signal.source,
-                    score=event.signal.score,
-                    confidence=event.signal.confidence,
-                    timestamp=event.signal.timestamp,
-                    reason=event.signal.reason,
+                    source=unified.source,
+                    score=(
+                        unified.normalized_value
+                        if unified.normalized_value is not None
+                        else event.signal.score
+                    ),
+                    confidence=unified.confidence,
+                    timestamp=unified.observed_at,
+                    reason=unified.reason,
                     correlation_id=event.correlation_id,
                     raw_metadata={
                         "event_id": event.event_id,
                         "event_version": event.event_version,
                         "occurred_at": event.occurred_at.isoformat(),
+                        "unified_signal": unified.to_payload(),
                     },
                 )
                 logger.info(
@@ -132,11 +156,11 @@ class SignalDecisionService:
                     signal,
                     correlation_id=event.correlation_id,
                     event_version=event.event_version,
-                    metadata=event.metadata,
+                    metadata=event_metadata,
                 )
                 engine_content = self.evidence_factory.build_content(
                     topic,
-                    event.signal,
+                    unified,
                     signal_id=signal.id,
                     correlation_id=event.correlation_id,
                     event_version=event.event_version,
@@ -150,7 +174,7 @@ class SignalDecisionService:
                 )
                 decision = self.decision_engine.evaluate(
                     engine_content,
-                    (event.signal,),
+                    engine_content.signals,
                     self.decision_config,
                 )
                 logger.info(

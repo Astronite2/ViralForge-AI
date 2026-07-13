@@ -106,6 +106,12 @@ class DecisionEngine:
     def _raw_value(
         self, content: Content, signals: tuple[TrendSignal, ...], factor: str
     ) -> float:
+        values = self._factor_mapping(content.metadata, "decision_factors")
+        if (
+            content.metadata.get("decision_factor_authority") == "unified_signal"
+            and factor in values
+        ):
+            return self._as_float(values[factor])
         opportunity = self._factor_mapping(content.metadata, "opportunity_dimensions")
         if opportunity:
             mapped = {
@@ -123,7 +129,6 @@ class DecisionEngine:
         if factor == "trend_momentum" and signals:
             return self._average(signal.score for signal in signals)
         if factor == "confidence":
-            values = self._factor_mapping(content.metadata, "decision_factors")
             opportunity_confidence = self._metadata_value(
                 content.metadata, "opportunity_confidence", None
             )
@@ -136,12 +141,17 @@ class DecisionEngine:
                 if signals
                 else 0.0
             )
-        values = self._factor_mapping(content.metadata, "decision_factors")
         return self._as_float(values.get(factor, content.metrics.get(factor, 0.0)))
 
     def _confidence(
         self, content: Content, signals: tuple[TrendSignal, ...], factor: str
     ) -> float:
+        values = self._factor_mapping(content.metadata, "decision_confidence")
+        if (
+            content.metadata.get("decision_factor_authority") == "unified_signal"
+            and factor in values
+        ):
+            return self._clamp(self._as_float(values[factor]))
         opportunity = self._factor_mapping(content.metadata, "opportunity_dimensions")
         if (
             factor
@@ -162,7 +172,6 @@ class DecisionEngine:
                 return self._clamp(float(opportunity_confidence) / 100.0)
         if factor == "trend_momentum" and signals:
             return self._clamp(self._average(signal.confidence for signal in signals))
-        values = self._factor_mapping(content.metadata, "decision_confidence")
         return self._clamp(self._as_float(values.get(factor, 0.5)))
 
     def _reason(self, content: Content, factor: str, normalized_value: float) -> str:
@@ -174,7 +183,7 @@ class DecisionEngine:
         return f"{self._factor_labels[factor]} is {strength}."
 
     def _source(self, signals: tuple[TrendSignal, ...], factor: str) -> str:
-        if factor == "trend_momentum" and signals:
+        if signals:
             return ", ".join(sorted({signal.source for signal in signals}))
         return "content_metadata"
 

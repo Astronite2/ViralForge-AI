@@ -84,10 +84,11 @@ def process_signal_detected(self: Any, payload: Mapping[str, Any]) -> dict[str, 
     default_retry_delay=settings.processing_retry_delay_seconds,
 )
 def poll_google_trends(
-    self: Any, *, geo: str = "US", limit: int | None = None
+    self: Any, *, geo: str | None = None, limit: int | None = None
 ) -> dict[str, Any]:
     """Poll Google Trends, enqueue signal tasks, and return a batch summary."""
     batch_limit = limit if limit is not None else settings.polling_batch_size
+    region = geo or settings.google_trends_default_geo
     logger.info(
         "Google Trends polling started",
         extra={
@@ -99,7 +100,7 @@ def poll_google_trends(
     report = ConnectorOrchestrator().run(
         {
             settings.google_trends_source_name: {
-                "geo": geo,
+                "geo": region,
                 "limit": batch_limit,
             }
         },
@@ -117,6 +118,63 @@ def poll_google_trends(
     return _report_payload(report)
 
 
+
+@celery_app.task(
+    bind=True,
+    name="backend.app.workers.tasks.poll_youtube",
+    max_retries=settings.processing_retry_limit,
+    default_retry_delay=settings.processing_retry_delay_seconds,
+)
+def poll_youtube(
+    self: Any,
+    *,
+    query: str,
+    region: str | None = None,
+    limit: int | None = None,
+) -> dict[str, Any]:
+    """Poll YouTube, process normalized content, and return a batch summary."""
+    search_query = query.strip()
+    if not search_query:
+        raise ValueError("YouTube query is required")
+
+    batch_limit = (
+        limit if limit is not None else settings.youtube_default_limit
+    )
+    search_region = region or settings.youtube_default_region
+
+    logger.info(
+        "YouTube polling started",
+        extra={
+            "task_id": self.request.id,
+            "correlation_id": "",
+            "source": settings.youtube_source_name,
+            "query": search_query,
+        },
+    )
+
+    report = ConnectorOrchestrator().run(
+        {
+            settings.youtube_source_name: {
+                "query": search_query,
+                "region": search_region,
+                "limit": batch_limit,
+            }
+        },
+        enabled_connectors=(settings.youtube_source_name,),
+    )
+
+    logger.info(
+        "YouTube polling completed",
+        extra={
+            "task_id": self.request.id,
+            "source": settings.youtube_source_name,
+            "query": search_query,
+            "connector_reports": len(report.connector_reports),
+        },
+    )
+
+    return _report_payload(report)
+
 def _report_payload(report: Any) -> dict[str, Any]:
     return {
         "started_at": report.started_at.isoformat(),
@@ -132,6 +190,9 @@ def _report_payload(report: Any) -> dict[str, Any]:
                 "decisions_created": connector.decisions_created,
                 "duration_ms": connector.duration_ms,
                 "errors": list(connector.errors),
+                "provider": connector.provider,
+                "provider_experimental": connector.provider_experimental,
+                "error_code": connector.error_code,
             }
             for connector in report.connector_reports
         ],

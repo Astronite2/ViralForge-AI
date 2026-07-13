@@ -257,10 +257,16 @@ def test_api_endpoints_return_persisted_data(session: Any) -> None:
             signals_response = client.get("/api/v1/signals")
             assert signals_response.status_code == 200
             assert len(signals_response.json()) == 2
+            assert signals_response.json()[0]["unified_signal"]["signal_type"] == (
+                "SEARCH_TREND"
+            )
 
             signal_detail = client.get(f"/api/v1/signals/{first_result.signal.id}")
             assert signal_detail.status_code == 200
             assert signal_detail.json()["topic_name"] == "Ancient Egypt"
+            assert signal_detail.json()["unified_signal"]["topic_id"] == (
+                first_result.topic.id
+            )
 
             decisions_response = client.get("/api/v1/decisions")
             assert decisions_response.status_code == 200

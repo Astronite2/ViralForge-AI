@@ -5,7 +5,13 @@ from celery.schedules import crontab
 
 from backend.app.core.config import settings
 
-celery_app = Celery("viralforge", broker=settings.redis_url, backend=settings.redis_url)
+celery_app = Celery(
+    "viralforge",
+    broker=settings.redis_url,
+    backend=settings.redis_url,
+    include=["backend.app.workers.tasks"],
+)
+
 celery_app.conf.update(
     task_serializer="json",
     result_serializer="json",
