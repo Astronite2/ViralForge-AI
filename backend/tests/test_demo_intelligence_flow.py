@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from contextlib import suppress
+from typing import Any
 
 import pytest
 from sqlalchemy import create_engine
@@ -11,8 +12,12 @@ from sqlalchemy.pool import StaticPool
 
 import backend.app.models  # noqa: F401
 from backend.app.db.base import Base
+from backend.app.models.evidence import EvidenceModel
 from backend.app.models.processed_event import ProcessedEventModel
 from backend.app.repositories.decision import DecisionRepository
+from backend.app.repositories.historical_observation import (
+    HistoricalObservationRepository,
+)
 from backend.app.repositories.topic import TopicRepository
 from backend.app.repositories.trend_signal import TrendSignalRepository
 from backend.scripts import demo_intelligence_flow as demo
@@ -103,20 +108,66 @@ def test_stable_event_id_remains_idempotent() -> None:
     factory, dispose = _sqlite_session_factory()
 
     try:
+        normalized_variant = demo._fixture_google_trends_item()
+        normalized_variant["query"] = "  Ancient   Egypt  "
         first = demo.run_demo(
             database_mode="configured",
             stable_event_id=True,
             session_factory=factory,
         )
+        with factory() as session:
+            after_first = _counts(session)
         second = demo.run_demo(
             database_mode="configured",
             stable_event_id=True,
             session_factory=factory,
+            raw_item=normalized_variant,
         )
 
         assert first.decision_id == second.decision_id
         with factory() as session:
-            assert len(DecisionRepository(session).list(10, 0)) == 1
+            after_second = _counts(session)
+            assert after_second == after_first
+    finally:
+        dispose()
+
+
+def test_modified_signal_creates_new_observation_and_decision() -> None:
+    factory, dispose = _sqlite_session_factory()
+
+    try:
+        first = demo.run_demo(
+            database_mode="configured",
+            session_factory=factory,
+        )
+        with factory() as session:
+            counts_after_first = _counts(session)
+
+        modified_item = {
+            "query": "Ancient Egypt",
+            "title": "Ancient Egypt",
+            "url": "https://trends.google.com/trends/explore?q=Ancient%20Egypt",
+            "published_at": demo._fixture_google_trends_item()["published_at"],
+            "rank": 2,
+            "geo": "US",
+        }
+        second = demo.run_demo(
+            database_mode="configured",
+            session_factory=factory,
+            raw_item=modified_item,
+        )
+        with factory() as session:
+            counts_after_second = _counts(session)
+
+        assert first.decision_id != second.decision_id
+        assert counts_after_second["topics"] == counts_after_first["topics"]
+        assert counts_after_second["signals"] == counts_after_first["signals"] + 1
+        assert counts_after_second["evidence"] > counts_after_first["evidence"]
+        assert counts_after_second["decisions"] == counts_after_first["decisions"] + 1
+        assert (
+            counts_after_second["historical_observations"]
+            == counts_after_first["historical_observations"] + 1
+        )
     finally:
         dispose()
 
@@ -161,3 +212,23 @@ def _sqlite_session_factory() -> tuple[Callable[[], object], Callable[[], None]]
             engine.dispose()
 
     return factory, dispose
+
+
+def _counts(session: Any) -> dict[str, int]:
+    topics = TopicRepository(session).list(10, 0)
+    return {
+        "topics": len(topics),
+        "signals": len(TrendSignalRepository(session).list(10, 0)),
+        "decisions": len(DecisionRepository(session).list(10, 0)),
+        "historical_observations": (
+            len(
+                HistoricalObservationRepository(session).list_by_topic(
+                    topics[0].id, 10, 0
+                )
+            )
+            if topics
+            else 0
+        ),
+        "processed_events": session.query(ProcessedEventModel).count(),
+        "evidence": session.query(EvidenceModel).count(),
+    }

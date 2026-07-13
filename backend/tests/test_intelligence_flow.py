@@ -14,6 +14,10 @@ from backend.app.domain.trend_signal import TrendSignal
 from backend.app.main import app
 from backend.app.models.processed_event import ProcessedEventModel
 from backend.app.repositories.decision import DecisionRepository
+from backend.app.repositories.evidence import EvidenceRepository
+from backend.app.repositories.historical_evidence import (
+    HistoricalEvidenceRepository,
+)
 from backend.app.repositories.processed_event import ProcessedEventRepository
 from backend.app.repositories.topic import TopicRepository
 from backend.app.repositories.trend_signal import TrendSignalRepository
@@ -160,6 +164,16 @@ def test_signal_decision_service_persists_traceable_decision(session: Any) -> No
     assert len(TrendSignalRepository(session).list(10, 0)) == 1
     assert len(DecisionRepository(session).list(10, 0)) == 1
     assert ProcessedEventRepository(session).exists("event-1") is True
+
+    evidence_ids = {
+        evidence.id
+        for evidence in EvidenceRepository(session).list_by_decision(result.decision.id)
+    }
+    historical_evidence = HistoricalEvidenceRepository(session).list_by_topic(
+        result.topic.id
+    )
+    assert historical_evidence
+    assert {record.evidence_id for record in historical_evidence} == evidence_ids
 
 
 def test_signal_decision_service_is_idempotent_for_duplicate_event(

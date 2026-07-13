@@ -88,26 +88,9 @@ class SignalDecisionService:
                 "source": event.signal.source,
             },
         )
-        existing = self.processed_event_repository.get_by_event_id(event.event_id)
-        if existing is not None and existing.decision_id is not None:
-            decision = self.decision_repository.get_by_id(existing.decision_id)
-            if decision is None:
-                raise RuntimeError("Processed event references a missing decision")
-            signal = self._first_signal_for_decision(decision.id)
-            topic = self._topic_for_decision(decision.topic_id)
-            decision_event = self._decision_event(decision)
-            return SignalDecisionResult(
-                topic=topic,
-                signal=signal,
-                decision=decision,
-                evidence=tuple(self.evidence_repository.list_by_decision(decision.id)),
-                processed_event=existing,
-                decision_event=decision_event,
-                duplicate=True,
-            )
-
+        has_outer_transaction = self.session.in_transaction()
         try:
-            with self._transaction():
+            with self._transaction(has_outer_transaction):
                 topic_name = self._topic_candidate(event.signal.reason)
                 topic = self.topic_normalization.resolve(topic_name)
                 logger.info(
@@ -186,6 +169,7 @@ class SignalDecisionService:
                     )
                     for evidence in decision.evidence
                 )
+                self.session.flush()
                 logger.info(
                     "evidence generated",
                     extra={
@@ -358,8 +342,8 @@ class SignalDecisionService:
         return signal
 
     @contextmanager
-    def _transaction(self):
-        if self.session.in_transaction():
+    def _transaction(self, has_outer_transaction: bool):
+        if has_outer_transaction:
             with self.session.begin_nested():
                 yield
             return

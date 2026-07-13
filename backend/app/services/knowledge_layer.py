@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
-import json
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime
@@ -28,6 +26,7 @@ from backend.app.repositories.opportunity_score import OpportunityScoreRepositor
 from backend.app.repositories.topic_relationship import TopicRelationshipRepository
 from backend.app.services.historical_analytics import HistoricalAnalyticsService
 from backend.app.services.opportunity_engine import OpportunityEngine
+from backend.app.utils.idempotency import stable_observation_hash
 
 
 @dataclass(frozen=True, slots=True)
@@ -74,7 +73,13 @@ class KnowledgeLayerService:
         metadata: Mapping[str, object] | None = None,
     ) -> KnowledgeIngestionResult:
         payload = self._payload(signal, metadata)
-        observation_hash = self._hash(topic.id, signal.source, payload)
+        observation_hash = stable_observation_hash(
+            topic.id,
+            signal.source,
+            signal,
+            event_version=event_version,
+            content=self._content(metadata),
+        )
         existing = self.observation_repository.get_by_hash(observation_hash)
         if existing is not None:
             analytics = self.analytics_service.calculate(
@@ -295,16 +300,6 @@ class KnowledgeLayerService:
         }
 
     @staticmethod
-    def _hash(topic_id: str, source: str, payload: Mapping[str, object]) -> str:
-        canonical = json.dumps(
-            payload,
-            sort_keys=True,
-            default=str,
-            separators=(",", ":"),
-        )
-        return hashlib.sha256(f"{topic_id}:{source}:{canonical}".encode()).hexdigest()
-
-    @staticmethod
     def _change_type(previous: HistoricalObservationModel | None, score: float) -> str:
         if previous is None:
             return "new"
@@ -340,6 +335,15 @@ class KnowledgeLayerService:
             return False
         content = metadata.get("content")
         return isinstance(content, Mapping) and bool(content)
+
+    @staticmethod
+    def _content(metadata: Mapping[str, object] | None) -> Mapping[str, object] | None:
+        if metadata is None:
+            return None
+        content = metadata.get("content")
+        if isinstance(content, Mapping):
+            return content
+        return None
 
     @staticmethod
     def _json_safe(value: object) -> object:

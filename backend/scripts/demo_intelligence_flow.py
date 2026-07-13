@@ -9,7 +9,7 @@ from contextlib import suppress
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
-from uuid import NAMESPACE_URL, uuid4, uuid5
+from uuid import uuid4
 
 from sqlalchemy import create_engine
 from sqlalchemy.engine import make_url
@@ -21,9 +21,11 @@ from backend.app.connectors.google_trends import GoogleTrendsConnector
 from backend.app.core.config import settings
 from backend.app.db.base import Base
 from backend.app.db.session import SessionLocal
+from backend.app.domain.trend_signal import TrendSignal
 from backend.app.repositories.decision import DecisionRepository
 from backend.app.services.signal_decision import SignalDecisionService
 from backend.app.utils.events import InMemoryDecisionEventEmitter, SignalDetected
+from backend.app.utils.idempotency import stable_signal_event_id
 
 
 @dataclass(frozen=True, slots=True)
@@ -57,6 +59,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--stable-event-id",
         action="store_true",
+        default=True,
         help="Use a deterministic event ID for idempotency testing.",
     )
     args = parser.parse_args(argv)
@@ -80,21 +83,20 @@ def main(argv: list[str] | None = None) -> int:
 def run_demo(
     *,
     database_mode: str = "configured",
-    stable_event_id: bool = False,
+    stable_event_id: bool = True,
     session_factory: Callable[[], Session] | None = None,
+    raw_item: dict[str, Any] | None = None,
 ) -> DemoResult:
     """Run the fixture-backed intelligence flow and verify persistence."""
     database = _build_database(database_mode, session_factory=session_factory)
-    event_id = _stable_event_id() if stable_event_id else str(uuid4())
-    correlation_id = (
-        str(uuid5(NAMESPACE_URL, f"{event_id}:correlation"))
-        if stable_event_id
-        else str(uuid4())
-    )
-    raw_item = _fixture_google_trends_item()
+    raw_item = raw_item or _fixture_google_trends_item()
     connector = GoogleTrendsConnector(fetcher=lambda geo, limit: [])
     connector.validate(raw_item)
     signal = connector.normalize(raw_item)
+    event_id = _stable_event_id(signal) if stable_event_id else str(uuid4())
+    correlation_id = (
+        _stable_correlation_id(event_id) if stable_event_id else str(uuid4())
+    )
     event = SignalDetected(
         signal=signal,
         correlation_id=correlation_id,
@@ -107,18 +109,19 @@ def run_demo(
             result = SignalDecisionService(session, event_emitter=emitter).process(
                 event
             )
+            decision_id = result.decision.id
+            decision_score = result.decision.score
+            session.commit()
 
         with database.session_factory() as verification_session:
-            persisted = DecisionRepository(verification_session).get_by_id(
-                result.decision.id
-            )
+            persisted = DecisionRepository(verification_session).get_by_id(decision_id)
             if persisted is None:
                 raise RuntimeError("Persisted decision could not be read back")
 
         return DemoResult(
             database_url=database.database_url,
-            decision_id=persisted.id,
-            decision_score=persisted.score,
+            decision_id=decision_id,
+            decision_score=decision_score,
             persisted=True,
         )
     finally:
@@ -169,8 +172,14 @@ def _fixture_google_trends_item() -> dict[str, Any]:
     }
 
 
-def _stable_event_id() -> str:
-    return str(uuid5(NAMESPACE_URL, "viralforge-demo-event"))
+def _stable_event_id(signal: TrendSignal) -> str:
+    return stable_signal_event_id("google_trends", signal)
+
+
+def _stable_correlation_id(event_id: str) -> str:
+    from uuid import NAMESPACE_URL, uuid5
+
+    return str(uuid5(NAMESPACE_URL, f"{event_id}:correlation"))
 
 
 def _redact_database_url(database_url: str) -> str:

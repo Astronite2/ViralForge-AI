@@ -20,7 +20,7 @@ class HistoricalAnalyticsService:
         ordered = tuple(
             sorted(
                 observations,
-                key=lambda observation: observation.observed_at,
+                key=lambda observation: self._utc_datetime(observation.observed_at),
             )
         )
         if not ordered:
@@ -123,7 +123,7 @@ class HistoricalAnalyticsService:
     @staticmethod
     def _freshness(observed_at: datetime) -> float:
         age_hours = (
-            datetime.now(UTC) - observed_at.astimezone(UTC)
+            datetime.now(UTC) - HistoricalAnalyticsService._utc_datetime(observed_at)
         ).total_seconds() / 3600.0
         return round(max(0.0, 1.0 - min(age_hours / 168.0, 1.0)), 4)
 
@@ -132,7 +132,10 @@ class HistoricalAnalyticsService:
         return round(
             max(
                 0.0,
-                (latest_at.astimezone(UTC) - started_at.astimezone(UTC)).total_seconds()
+                (
+                    HistoricalAnalyticsService._utc_datetime(latest_at)
+                    - HistoricalAnalyticsService._utc_datetime(started_at)
+                ).total_seconds()
                 / 3600.0,
             ),
             4,
@@ -162,10 +165,18 @@ class HistoricalAnalyticsService:
     ) -> dict[str, object]:
         return {
             "observation_id": observation.id,
-            "observed_at": observation.observed_at.isoformat(),
+            "observed_at": HistoricalAnalyticsService._utc_datetime(
+                observation.observed_at
+            ).isoformat(),
             "source": observation.source,
             "connector_name": observation.connector_name,
             "observation_type": observation.observation_type,
             "score": round(score, 2),
             "change_type": observation.change_type,
         }
+
+    @staticmethod
+    def _utc_datetime(value: datetime) -> datetime:
+        if value.tzinfo is None:
+            return value.replace(tzinfo=UTC)
+        return value.astimezone(UTC)

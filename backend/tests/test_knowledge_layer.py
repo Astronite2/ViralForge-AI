@@ -152,7 +152,8 @@ def test_history_and_graph_apis_return_persisted_knowledge(session: Any) -> None
         event_id="event-history",
         correlation_id="correlation-history",
     )
-    SignalDecisionService(session).process(event)
+    result = SignalDecisionService(session).process(event)
+    assert result.topic.id == topic.id
 
     service = KnowledgeLayerService(session)
     target = topic_repo.create("Pyramids", "pyramids")

@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
-import json
 import logging
 import time
 from collections.abc import Callable, Iterable, Mapping
 from datetime import UTC, datetime
-from uuid import NAMESPACE_URL, uuid4, uuid5
+from uuid import uuid4
 
 from sqlalchemy.orm import Session
 
@@ -25,6 +24,7 @@ from backend.app.domain.content import Content
 from backend.app.domain.trend_signal import TrendSignal
 from backend.app.services.signal_decision import SignalDecisionService
 from backend.app.utils.events import SignalDetected
+from backend.app.utils.idempotency import stable_signal_event_id
 
 logger = logging.getLogger(__name__)
 
@@ -125,13 +125,18 @@ class ConnectorOrchestrator:
                         signal=signal,
                         metadata=metadata,
                         event_id=self._event_id(
-                            connector_name, raw_item, signal_index=signal_index
+                            connector_name,
+                            normalized,
+                            signal_index=signal_index,
                         ),
                         correlation_id=connector_correlation_id,
                     )
                     with self.session_factory() as session:
                         result = SignalDecisionService(session).process(event)
-                    if not result.duplicate:
+                        signal_id = result.signal.id
+                        decision_id = result.decision.id
+                        duplicate = result.duplicate
+                    if not duplicate:
                         decisions_created += 1
                     logger.info(
                         "signal decision processed",
@@ -139,8 +144,8 @@ class ConnectorOrchestrator:
                             "connector": connector_name,
                             "correlation_id": connector_correlation_id,
                             "event_id": event.event_id,
-                            "signal_id": result.signal.id,
-                            "decision_id": result.decision.id,
+                            "signal_id": signal_id,
+                            "decision_id": decision_id,
                         },
                     )
                 items_processed += 1
@@ -183,14 +188,15 @@ class ConnectorOrchestrator:
     @staticmethod
     def _event_id(
         connector_name: str,
-        raw_item: Mapping[str, object],
+        normalized: TrendSignal | Content,
         *,
         signal_index: int,
     ) -> str:
-        canonical = json.dumps(
-            raw_item, sort_keys=True, default=str, separators=(",", ":")
+        return stable_signal_event_id(
+            connector_name,
+            normalized,
+            signal_index=signal_index,
         )
-        return str(uuid5(NAMESPACE_URL, f"{connector_name}:{signal_index}:{canonical}"))
 
     @staticmethod
     def _signals_for_normalized(

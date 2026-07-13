@@ -14,6 +14,7 @@ class EvidenceRepository(Repository):
         self, decision_id: str, signal_id: str, evidence: Evidence
     ) -> EvidenceModel:
         model = EvidenceModel(
+            id=evidence.id,
             signal_id=signal_id,
             decision_id=decision_id,
             source=evidence.source,
