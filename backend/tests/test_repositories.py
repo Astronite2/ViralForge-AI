@@ -34,6 +34,31 @@ def test_content_repository_stores_content(
     assert stored.metadata_ == {"source": "test"}
 
 
+def test_content_repository_save_updates_existing_content(
+    session: Session, raw_content: dict[str, Any]
+) -> None:
+    repository = ContentRepository(session)
+    content = ContentNormalizer().normalize(raw_content)
+    first = repository.save(content)
+    updated = ContentNormalizer().normalize(
+        {
+            **raw_content,
+            "title": "Updated title",
+            "metrics": {"views": 250.0},
+            "metadata": {"source": "refresh"},
+        }
+    )
+
+    second = repository.save(updated)
+    session.commit()
+
+    assert first is second
+    assert len(repository.list()) == 1
+    assert second.title == "Updated title"
+    assert second.metrics == {"views": 250.0}
+    assert second.metadata_ == {"source": "refresh"}
+
+
 def test_signal_and_opportunity_repositories_store_pipeline_results(
     session: Session, raw_content: dict[str, Any]
 ) -> None:

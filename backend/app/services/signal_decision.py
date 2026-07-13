@@ -104,6 +104,7 @@ class SignalDecisionService:
                 )
                 signal = self.trend_signal_repository.create(
                     topic_id=topic.id,
+                    content_id=self._content_id(event.metadata),
                     source=event.signal.source,
                     score=event.signal.score,
                     confidence=event.signal.confidence,
@@ -220,7 +221,8 @@ class SignalDecisionService:
                     "source": event.signal.source,
                 },
             )
-            self.session.rollback()
+            if not has_outer_transaction:
+                self.session.rollback()
             existing_after = self.processed_event_repository.get_by_event_id(
                 event.event_id
             )
@@ -253,7 +255,8 @@ class SignalDecisionService:
                     "source": event.signal.source,
                 },
             )
-            self.session.rollback()
+            if not has_outer_transaction:
+                self.session.rollback()
             raise
 
         decision_event = self._decision_event(decision_model)
@@ -286,6 +289,14 @@ class SignalDecisionService:
         if match is not None:
             return match.group("topic").strip()
         return reason.strip()
+
+    @staticmethod
+    def _content_id(metadata: dict[str, object]) -> str | None:
+        content = metadata.get("content")
+        if not isinstance(content, dict):
+            return None
+        identifier = content.get("id")
+        return str(identifier) if identifier is not None else None
 
     @staticmethod
     def _decision_metadata(

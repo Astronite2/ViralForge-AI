@@ -25,7 +25,7 @@ class PersistStage:
         self, content: Content, opportunity: ContentOpportunity
     ) -> ContentModel:
         """Store content, its signals, and its opportunity in one transaction."""
-        content_model = self.content_repository.upsert(content)
+        content_model = self.content_repository.save(content)
         for signal in content.signals:
             self.trend_repository.create(content.id, signal)
         self.opportunity_repository.create(content.id, opportunity)

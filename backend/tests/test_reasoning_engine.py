@@ -350,7 +350,10 @@ def test_reasoning_api_success_and_retrieval(session: Any, monkeypatch: Any) -> 
         app.dependency_overrides.clear()
 
 
-def test_reasoning_api_disabled_returns_503(session: Any) -> None:
+def test_reasoning_api_disabled_returns_503(
+    session: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(settings, "ai_reasoning_enabled", False)
     decision = _seed_decision(session, "Ancient Egypt", "api-disabled")
     app.dependency_overrides[get_db] = lambda: session
     try:

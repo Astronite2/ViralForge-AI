@@ -15,8 +15,13 @@ from backend.app.connectors.youtube import (
     YouTubeResponseError,
 )
 from backend.app.domain.content import Content
+from backend.app.repositories.content import ContentRepository
 from backend.app.repositories.decision import DecisionRepository
+from backend.app.repositories.historical_observation import (
+    HistoricalObservationRepository,
+)
 from backend.app.services.connector_orchestrator import ConnectorOrchestrator
+from backend.app.services.signal_decision import SignalDecisionService
 
 
 class _FakeYouTubeClient:
@@ -57,9 +62,7 @@ class _FakeYouTubeClient:
         if not self.search_pages:
             return {"items": []}
         index = len(self.search_calls) - 1
-        if index < len(self.search_pages):
-            return self.search_pages[index]
-        return {"items": []}
+        return self.search_pages[min(index, len(self.search_pages) - 1)]
 
     def videos(self, video_ids: list[str]) -> Mapping[str, Any]:
         self.videos_calls.append(list(video_ids))
@@ -326,7 +329,13 @@ def test_default_registry_registers_youtube_when_key_configured(
 
 def test_orchestrator_processes_youtube_content_and_remains_idempotent(
     session: Any,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    monkeypatch.setattr(
+        YouTubeConnector,
+        "_freshness_hours",
+        staticmethod(lambda _published_at: 100.0),
+    )
     connector = YouTubeConnector(
         client=_FakeYouTubeClient(
             search_pages=[
@@ -382,6 +391,19 @@ def test_orchestrator_processes_youtube_content_and_remains_idempotent(
         session_factory=lambda: session,
     )
 
+    original_process = SignalDecisionService.process
+
+    def process_after_content_persistence(
+        service: SignalDecisionService, event: Any
+    ) -> Any:
+        content = event.metadata["content"]
+        assert ContentRepository(service.session).get(content["id"]) is not None
+        return original_process(service, event)
+
+    monkeypatch.setattr(
+        SignalDecisionService, "process", process_after_content_persistence
+    )
+
     connector_kwargs = {
         "youtube": {"query": "Ancient Egypt", "region": "US", "limit": 1}
     }
@@ -391,3 +413,11 @@ def test_orchestrator_processes_youtube_content_and_remains_idempotent(
     assert first.connector_reports[0].decisions_created == 1
     assert second.connector_reports[0].decisions_created == 0
     assert len(DecisionRepository(session).list(10, 0)) == 1
+    stored = ContentRepository(session).get("youtube:video-3")
+    assert stored is not None
+    assert len(ContentRepository(session).list()) == 1
+    decision = DecisionRepository(session).list(10, 0)[0]
+    observations = HistoricalObservationRepository(session).list_by_topic(
+        decision.topic_id, 10, 0
+    )
+    assert observations[0].content_id == stored.id

@@ -1,32 +1,55 @@
-# React + TypeScript + Vite
+# ViralForge Intelligence Dashboard
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+Production React client for ViralForge AI's decision-intelligence APIs. It is a read-only, desktop-first interface for topics, connector signals, opportunities, deterministic decisions, evidence, historical analytics, AI reasoning, and knowledge relationships.
 
-Currently, two official plugins are available:
+## Stack
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+- React 19, strict TypeScript, and Vite
+- Tailwind CSS
+- TanStack Query for cache, retries, cancellation, and request state
+- Recharts for intelligence charts
+- React Flow for the interactive knowledge graph
+- React Router with lazy-loaded route bundles
+- Vitest and Testing Library
 
-## React Compiler
+## Run locally
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+Start the API at `http://localhost:8000`, then:
 
-## Expanding the Oxlint configuration
-
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
-
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+```bash
+cd frontend
+npm install
+npm run dev
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+Vite serves the dashboard at `http://localhost:5173` and proxies API traffic to port 8000. To use another API host, create `frontend/.env.local`:
+
+```bash
+VITE_API_URL=http://localhost:8000
+```
+
+## Verification
+
+```bash
+npm run lint
+npm run test
+npm run build
+```
+
+The production output is written to `frontend/dist`.
+
+## Structure
+
+```text
+src/
+  api/           typed REST client, API types, query keys and hooks
+  components/    reusable cards, badges, states, evidence and metrics
+  features/      route-level feature modules
+  layout/        responsive application shell and global navigation
+  lib/           data-formatting utilities
+  test/          shared test setup
+```
+
+## API behavior
+
+The dashboard uses existing REST routes only. It does not create mock records when APIs return empty. Empty data, offline connectors, unavailable backends, disabled/no-output AI, and request timeouts each render an explicit non-crashing state. Global AI reasoning history is assembled from the existing per-topic reasoning route because the backend intentionally has no global reasoning-list endpoint.

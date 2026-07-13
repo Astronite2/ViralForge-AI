@@ -17,8 +17,13 @@ class ContentRepository(Repository):
         query = self.session.query(ContentModel).order_by(ContentModel.published_at)
         return list(query)
 
-    def upsert(self, content: Content) -> ContentModel:
-        """Store a normalized content object without committing the session."""
+    def save(self, content: Content) -> ContentModel:
+        """Insert or update normalized content without committing the session.
+
+        The connector-provided content identifier is the idempotency key. Keeping
+        the flush inside this repository guarantees that dependent rows can safely
+        reference the content within the caller's transaction.
+        """
         model = self.get(content.id)
         values = {
             "platform": content.platform,
@@ -44,3 +49,7 @@ class ContentRepository(Repository):
                 setattr(model, field, value)
         self.session.flush()
         return model
+
+    def upsert(self, content: Content) -> ContentModel:
+        """Backward-compatible alias for :meth:`save`."""
+        return self.save(content)

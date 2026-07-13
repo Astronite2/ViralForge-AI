@@ -22,6 +22,7 @@ from backend.app.domain.connector_orchestration import (
 )
 from backend.app.domain.content import Content
 from backend.app.domain.trend_signal import TrendSignal
+from backend.app.repositories.content import ContentRepository
 from backend.app.services.signal_decision import SignalDecisionService
 from backend.app.utils.events import SignalDetected
 from backend.app.utils.idempotency import stable_signal_event_id
@@ -119,23 +120,34 @@ class ConnectorOrchestrator:
                 connector.validate(raw_item)
                 normalized = connector.normalize(raw_item)
                 signals = self._signals_for_normalized(normalized)
-                for signal_index, signal in enumerate(signals):
-                    metadata = self._metadata_for_normalized(normalized, raw_item)
-                    event = SignalDetected(
-                        signal=signal,
-                        metadata=metadata,
-                        event_id=self._event_id(
-                            connector_name,
-                            normalized,
-                            signal_index=signal_index,
-                        ),
-                        correlation_id=connector_correlation_id,
-                    )
-                    with self.session_factory() as session:
-                        result = SignalDecisionService(session).process(event)
-                        signal_id = result.signal.id
-                        decision_id = result.decision.id
-                        duplicate = result.duplicate
+                metadata = self._metadata_for_normalized(normalized, raw_item)
+                processed_signals: list[tuple[SignalDetected, str, str, bool]] = []
+                with self.session_factory() as session:
+                    with session.begin():
+                        if isinstance(normalized, Content):
+                            ContentRepository(session).save(normalized)
+                        service = SignalDecisionService(session)
+                        for signal_index, signal in enumerate(signals):
+                            event = SignalDetected(
+                                signal=signal,
+                                metadata=metadata,
+                                event_id=self._event_id(
+                                    connector_name,
+                                    normalized,
+                                    signal_index=signal_index,
+                                ),
+                                correlation_id=connector_correlation_id,
+                            )
+                            result = service.process(event)
+                            processed_signals.append(
+                                (
+                                    event,
+                                    result.signal.id,
+                                    result.decision.id,
+                                    result.duplicate,
+                                )
+                            )
+                for event, signal_id, decision_id, duplicate in processed_signals:
                     if not duplicate:
                         decisions_created += 1
                     logger.info(

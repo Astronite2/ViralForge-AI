@@ -8,11 +8,14 @@ from typing import Any
 
 from backend.app.connectors.base import BaseConnector
 from backend.app.connectors.registry import ConnectorRegistry
+from backend.app.domain.content import Content
 from backend.app.domain.trend_signal import TrendSignal
+from backend.app.repositories.content import ContentRepository
 from backend.app.repositories.decision import DecisionRepository
 from backend.app.repositories.topic import TopicRepository
 from backend.app.repositories.trend_signal import TrendSignalRepository
 from backend.app.services.connector_orchestrator import ConnectorOrchestrator
+from backend.app.services.signal_decision import SignalDecisionService
 
 
 class _FakeSignalConnector(BaseConnector[TrendSignal]):
@@ -53,6 +56,43 @@ class _FakeSignalConnector(BaseConnector[TrendSignal]):
             raise ValueError(f"missing: {', '.join(missing)}")
         if not str(raw_content["title"]).strip():
             raise ValueError("title cannot be empty")
+
+
+class _FakeContentConnector(BaseConnector[Content]):
+    def __init__(self, raw_items: list[Mapping[str, Any]]) -> None:
+        self.raw_items = raw_items
+
+    def fetch(self, **kwargs: Any) -> list[Mapping[str, Any]]:
+        return list(self.raw_items)
+
+    def normalize(self, raw_content: Mapping[str, Any]) -> Content:
+        signal = TrendSignal(
+            source="youtube",
+            score=0.8,
+            confidence=0.9,
+            timestamp=datetime(2026, 1, 1, tzinfo=UTC),
+            reason=f"YouTube activity increased for {raw_content['title']}.",
+        )
+        return Content(
+            id=str(raw_content["id"]),
+            platform="youtube",
+            creator_name="History Hub",
+            creator_id="channel-1",
+            title=str(raw_content["title"]),
+            description=None,
+            url="https://youtube.com/watch?v=transaction-test",
+            language="en",
+            country="US",
+            published_at=datetime(2026, 1, 1, tzinfo=UTC),
+            duration_seconds=60,
+            content_type="video",
+            metrics={"view_count": float(raw_content["view_count"])},
+            signals=(signal,),
+        )
+
+    def validate(self, raw_content: Mapping[str, Any]) -> None:
+        if not raw_content.get("id"):
+            raise ValueError("id is required")
 
 
 def test_successful_connector_run_creates_decision(session: Any) -> None:
@@ -213,3 +253,50 @@ def test_repeated_event_remains_idempotent(session: Any) -> None:
     assert first.connector_reports[0].decisions_created == 1
     assert second.connector_reports[0].decisions_created == 0
     assert len(DecisionRepository(session).list(10, 0)) == 1
+
+
+def test_content_and_decision_processing_share_one_transaction(
+    session: Any, monkeypatch: Any
+) -> None:
+    connector = _FakeContentConnector(
+        [{"id": "youtube:rollback", "title": "Rollback", "view_count": 100}]
+    )
+    registry = ConnectorRegistry()
+    registry.register("youtube", connector)
+
+    def fail_after_content_save(service: SignalDecisionService, event: Any) -> Any:
+        assert ContentRepository(service.session).get("youtube:rollback") is not None
+        raise RuntimeError("decision failure")
+
+    monkeypatch.setattr(SignalDecisionService, "process", fail_after_content_save)
+    report = ConnectorOrchestrator(
+        registry=registry, session_factory=lambda: session
+    ).run(enabled_connectors=("youtube",))
+
+    assert report.connector_reports[0].status == "failed"
+    assert ContentRepository(session).get("youtube:rollback") is None
+
+
+def test_reingested_content_updates_existing_row(session: Any) -> None:
+    connector = _FakeContentConnector(
+        [{"id": "youtube:update", "title": "Original", "view_count": 100}]
+    )
+    registry = ConnectorRegistry()
+    registry.register("youtube", connector)
+    orchestrator = ConnectorOrchestrator(
+        registry=registry, session_factory=lambda: session
+    )
+
+    first = orchestrator.run(enabled_connectors=("youtube",))
+    connector.raw_items = [
+        {"id": "youtube:update", "title": "Updated", "view_count": 250}
+    ]
+    second = orchestrator.run(enabled_connectors=("youtube",))
+
+    stored = ContentRepository(session).get("youtube:update")
+    assert first.connector_reports[0].decisions_created == 1
+    assert second.connector_reports[0].decisions_created == 1
+    assert len(ContentRepository(session).list()) == 1
+    assert stored is not None
+    assert stored.title == "Updated"
+    assert stored.metrics == {"view_count": 250.0}

@@ -1,6 +1,10 @@
-# ViralForge AI Backend
+# ViralForge AI
+
+[![CI](https://github.com/Astronite2/ViralForge-AI/actions/workflows/ci.yml/badge.svg)](https://github.com/Astronite2/ViralForge-AI/actions/workflows/ci.yml)
 
 ViralForge AI is a Content Intelligence Platform foundation designed for high-volume platform collection, event-driven processing, background work, and future AI-assisted analysis. This repository intentionally provides architecture only; it contains no product business logic, authentication implementation, or AI workflows.
+
+Phase 5 adds the production Intelligence Dashboard in [`frontend/`](frontend/README.md). The read-only React application exposes the existing intelligence stack as a dark, responsive decision workspace without changing backend architecture or API contracts.
 
 ## Architecture
 
@@ -48,6 +52,7 @@ alembic/              migration environment
 ## Prerequisites
 
 - Python 3.13
+- Node.js 22 and npm
 - Docker and Docker Compose
 - PostgreSQL and Redis when running services outside Docker
 
@@ -64,6 +69,18 @@ Flower is exposed at `http://localhost:5555`.
 Readiness is available at `GET /ready`.
 Liveness is available at `GET /health`.
 The reasoning APIs are available under `/api/v1/reasoning/*` when enabled.
+
+## Intelligence Dashboard
+
+With the API running, start the frontend in another terminal:
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Open `http://localhost:5173`. The development server proxies REST requests to `http://localhost:8000`; set `VITE_API_URL` for a different API origin. See the [frontend README](frontend/README.md) for architecture and verification commands.
 
 ## Alembic migrations
 
@@ -92,6 +109,52 @@ ruff check backend alembic
 black --check backend alembic
 pytest
 ```
+
+## Continuous integration
+
+GitHub Actions runs the repository quality gate for every pull request and for pushes to `main` and `feature/**` branches. Superseded runs on the same branch or pull request are cancelled automatically.
+
+The required jobs are:
+
+| Job | Checks |
+| --- | --- |
+| Backend quality | Ruff, Black, the complete Pytest suite, and an Alembic upgrade/downgrade/re-upgrade lifecycle on a disposable database |
+| PostgreSQL integration | PostgreSQL 16 and Redis service health, Alembic upgrade to head, content insert/update persistence, `/health`, and `/ready` |
+| Frontend quality | `npm ci`, Oxlint, Vitest, strict TypeScript compilation, and the Vite production build |
+| Repository hygiene | Tracked `.env` files, generated caches, required migrations and lockfile, and common committed-secret signatures |
+| Docker validation | Compose configuration validation and the production API image build |
+| Quality gate | Requires every preceding job to complete successfully |
+
+CI uses only disposable local credentials. AI reasoning and YouTube access are disabled, and no live provider keys are required.
+
+Run the equivalent quality checks locally from the repository root:
+
+```bash
+python3 -m pytest -q
+python3 -m ruff check backend alembic scripts
+python3 -m black --check backend alembic scripts
+python3 scripts/check_repository_hygiene.py
+
+cd frontend
+npm ci
+npm run lint
+npm run test
+npm run build
+cd ..
+
+docker compose config --quiet
+docker build .
+```
+
+The frontend build runs `tsc -b` before Vite, so a successful build includes the strict TypeScript check.
+
+### Troubleshooting CI
+
+- Backend failures: reproduce with Python 3.13 and install `.[dev]`; keep `AI_REASONING_ENABLED=false` when testing the disabled-provider behavior.
+- PostgreSQL failures: inspect the service health output first, then verify `DATABASE_URL` targets a disposable PostgreSQL 16 database and run `python3 -m alembic upgrade head`.
+- Frontend failures: use Node.js 22 and `npm ci`; do not replace the committed lockfile with an install from a different dependency tree.
+- Docker failures: run `docker compose config` before rebuilding to separate configuration errors from image-build errors.
+- Hygiene failures report only the filename and signature category. Remove the credential from Git history and rotate it; never print or recommit the value.
 
 ## Running the demo flow
 

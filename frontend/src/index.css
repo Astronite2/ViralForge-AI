@@ -1,5 +1,21 @@
-html,
-body,
-#root {
-  min-height: 100%;
-}
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+:root { color-scheme:dark; --canvas:8 11 16; --surface:13 18 26; --raised:17 24 35; --line:32 42 56; --muted:130 144 163; --ink:237 241 247; --accent:77 141 255; --success:57 201 119; --warning:232 173 69; --danger:238 102 117; --color-canvas:#080b10; --color-surface:#0d121a; --color-raised:#111823; --color-line:#202a38; --color-muted:#8290a3; --color-ink:#edf1f7; font-family:Inter,ui-sans-serif,system-ui,sans-serif; background:#080b10; color:#edf1f7; font-synthesis:none; }
+:root.light { color-scheme:light; --canvas:245 247 250; --surface:255 255 255; --raised:247 249 252; --line:220 226 234; --muted:102 115 134; --ink:16 23 34; --color-canvas:#f5f7fa; --color-surface:#fff; --color-raised:#f7f9fc; --color-line:#dce2ea; --color-muted:#667386; --color-ink:#101722; }
+* { box-sizing:border-box; }
+html,body,#root { min-width:320px; min-height:100%; margin:0; }
+body { min-height:100vh; background:var(--color-canvas); color:var(--color-ink); }
+button,input,select { font:inherit; } button,a { -webkit-tap-highlight-color:transparent; }
+button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible { outline:2px solid #4d8dff; outline-offset:2px; }
+::selection { background:rgba(77,141,255,.3); }
+::-webkit-scrollbar { width:10px; height:10px; } ::-webkit-scrollbar-thumb { background:#273244; border:3px solid transparent; background-clip:padding-box; border-radius:999px; }
+.panel { @apply rounded-xl border border-line bg-surface shadow-[0_14px_36px_rgba(0,0,0,.13)]; }
+.panel-pad { @apply panel p-5 lg:p-6; } .subtle-label { @apply text-[10px] font-bold uppercase tracking-[.14em] text-muted; }
+.page-title { @apply text-2xl font-semibold tracking-[-.025em] text-ink lg:text-[28px]; } .section-title { @apply text-base font-semibold tracking-[-.015em] text-ink; }
+.input { @apply w-full rounded-lg border border-line bg-raised px-3 py-2 text-sm text-ink placeholder:text-muted focus:border-accent; }
+.btn { @apply inline-flex items-center justify-center gap-2 rounded-lg border border-line bg-raised px-3 py-2 text-sm font-medium text-ink transition-colors hover:border-[#35435a] hover:bg-[#17202d] disabled:cursor-not-allowed disabled:opacity-50; }
+.table-shell { @apply overflow-x-auto; } .data-table { @apply w-full min-w-[700px] border-collapse text-left text-sm; }
+.data-table th { @apply border-b border-line px-4 py-3 text-[10px] font-bold uppercase tracking-[.1em] text-muted; }
+.data-table td { @apply border-b border-line/70 px-4 py-3.5 text-sm text-ink; } .data-table tbody tr { @apply transition-colors hover:bg-raised/70; } .data-table tbody tr:last-child td { @apply border-b-0; }
+.recharts-cartesian-axis-tick-value { fill:var(--color-muted); font-size:11px; } .react-flow__attribution { display:none; } .react-flow__controls button { background:var(--color-surface); border-color:var(--color-line); fill:var(--color-ink); }
