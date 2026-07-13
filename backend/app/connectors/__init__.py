@@ -6,10 +6,12 @@ from backend.app.connectors.registry import (
     ConnectorRegistry,
     build_default_connector_registry,
 )
+from backend.app.connectors.youtube import YouTubeConnector
 
 __all__ = [
     "BaseConnector",
     "ConnectorRegistry",
     "GoogleTrendsConnector",
+    "YouTubeConnector",
     "build_default_connector_registry",
 ]

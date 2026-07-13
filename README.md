@@ -20,6 +20,9 @@ Connectors / Agents / Workers are isolated integration boundaries.
 
 Routes remain thin. They delegate orchestration to services, while repositories exclusively own persistence access. Domain objects are pure Python and never import SQLAlchemy.
 
+An optional AI reasoning layer sits above the deterministic stack. It remains
+disabled unless `AI_*` configuration is provided.
+
 ## Folder structure
 
 ```text
@@ -60,6 +63,7 @@ API docs are available at `http://localhost:8000/docs`.
 Flower is exposed at `http://localhost:5555`.
 Readiness is available at `GET /ready`.
 Liveness is available at `GET /health`.
+The reasoning APIs are available under `/api/v1/reasoning/*` when enabled.
 
 ## Alembic migrations
 

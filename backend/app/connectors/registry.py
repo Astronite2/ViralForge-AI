@@ -5,6 +5,8 @@ from typing import Any
 
 from backend.app.connectors.base import BaseConnector
 from backend.app.connectors.google_trends import GoogleTrendsConnector
+from backend.app.connectors.youtube import YouTubeConnector
+from backend.app.core.config import settings
 
 
 class ConnectorRegistry:
@@ -44,4 +46,9 @@ def build_default_connector_registry() -> ConnectorRegistry:
     """Create the default registry with the Google Trends connector."""
     registry = ConnectorRegistry()
     registry.register("google_trends", GoogleTrendsConnector())
+    if settings.youtube_api_key:
+        registry.register(
+            settings.youtube_source_name,
+            YouTubeConnector(api_key=settings.youtube_api_key),
+        )
     return registry

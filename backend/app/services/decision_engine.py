@@ -106,10 +106,29 @@ class DecisionEngine:
     def _raw_value(
         self, content: Content, signals: tuple[TrendSignal, ...], factor: str
     ) -> float:
+        opportunity = self._factor_mapping(content.metadata, "opportunity_dimensions")
+        if opportunity:
+            mapped = {
+                "trend_momentum": "growth",
+                "audience_demand": "demand",
+                "revenue_potential": "monetization",
+                "competition": "competition",
+                "evergreen": "evergreen",
+                "platform_fit": "platform_fit",
+                "confidence": "confidence",
+            }
+            opportunity_key = mapped.get(factor)
+            if opportunity_key is not None and opportunity_key in opportunity:
+                return self._as_float(opportunity[opportunity_key])
         if factor == "trend_momentum" and signals:
             return self._average(signal.score for signal in signals)
         if factor == "confidence":
             values = self._factor_mapping(content.metadata, "decision_factors")
+            opportunity_confidence = self._metadata_value(
+                content.metadata, "opportunity_confidence", None
+            )
+            if isinstance(opportunity_confidence, (int, float)):
+                return float(opportunity_confidence)
             if "confidence" in values:
                 return self._as_float(values["confidence"])
             return (
@@ -123,6 +142,24 @@ class DecisionEngine:
     def _confidence(
         self, content: Content, signals: tuple[TrendSignal, ...], factor: str
     ) -> float:
+        opportunity = self._factor_mapping(content.metadata, "opportunity_dimensions")
+        if (
+            factor
+            in {
+                "trend_momentum",
+                "audience_demand",
+                "revenue_potential",
+                "competition",
+                "evergreen",
+                "platform_fit",
+            }
+            and opportunity
+        ):
+            opportunity_confidence = self._metadata_value(
+                content.metadata, "opportunity_confidence", None
+            )
+            if isinstance(opportunity_confidence, (int, float)):
+                return self._clamp(float(opportunity_confidence) / 100.0)
         if factor == "trend_momentum" and signals:
             return self._clamp(self._average(signal.confidence for signal in signals))
         values = self._factor_mapping(content.metadata, "decision_confidence")

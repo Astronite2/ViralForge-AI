@@ -21,6 +21,7 @@ from backend.app.domain.connector_orchestration import (
     ConnectorExecutionReport,
     ConnectorOrchestrationReport,
 )
+from backend.app.domain.content import Content
 from backend.app.domain.trend_signal import TrendSignal
 from backend.app.services.signal_decision import SignalDecisionService
 from backend.app.utils.events import SignalDetected
@@ -117,28 +118,32 @@ class ConnectorOrchestrator:
             try:
                 connector.validate(raw_item)
                 normalized = connector.normalize(raw_item)
-                if not isinstance(normalized, TrendSignal):
-                    raise TypeError("Connector normalization must return TrendSignal")
-                event = SignalDetected(
-                    signal=normalized,
-                    event_id=self._event_id(connector_name, raw_item),
-                    correlation_id=connector_correlation_id,
-                )
-                with self.session_factory() as session:
-                    result = SignalDecisionService(session).process(event)
+                signals = self._signals_for_normalized(normalized)
+                for signal_index, signal in enumerate(signals):
+                    metadata = self._metadata_for_normalized(normalized, raw_item)
+                    event = SignalDetected(
+                        signal=signal,
+                        metadata=metadata,
+                        event_id=self._event_id(
+                            connector_name, raw_item, signal_index=signal_index
+                        ),
+                        correlation_id=connector_correlation_id,
+                    )
+                    with self.session_factory() as session:
+                        result = SignalDecisionService(session).process(event)
+                    if not result.duplicate:
+                        decisions_created += 1
+                    logger.info(
+                        "signal decision processed",
+                        extra={
+                            "connector": connector_name,
+                            "correlation_id": connector_correlation_id,
+                            "event_id": event.event_id,
+                            "signal_id": result.signal.id,
+                            "decision_id": result.decision.id,
+                        },
+                    )
                 items_processed += 1
-                if not result.duplicate:
-                    decisions_created += 1
-                logger.info(
-                    "signal decision processed",
-                    extra={
-                        "connector": connector_name,
-                        "correlation_id": connector_correlation_id,
-                        "event_id": event.event_id,
-                        "signal_id": result.signal.id,
-                        "decision_id": result.decision.id,
-                    },
-                )
             except Exception as exc:
                 items_failed += 1
                 errors.append(str(exc))
@@ -176,11 +181,55 @@ class ConnectorOrchestrator:
         )
 
     @staticmethod
-    def _event_id(connector_name: str, raw_item: Mapping[str, object]) -> str:
+    def _event_id(
+        connector_name: str,
+        raw_item: Mapping[str, object],
+        *,
+        signal_index: int,
+    ) -> str:
         canonical = json.dumps(
             raw_item, sort_keys=True, default=str, separators=(",", ":")
         )
-        return str(uuid5(NAMESPACE_URL, f"{connector_name}:{canonical}"))
+        return str(uuid5(NAMESPACE_URL, f"{connector_name}:{signal_index}:{canonical}"))
+
+    @staticmethod
+    def _signals_for_normalized(
+        normalized: TrendSignal | Content,
+    ) -> tuple[TrendSignal, ...]:
+        if isinstance(normalized, TrendSignal):
+            return (normalized,)
+        if isinstance(normalized, Content):
+            if normalized.signals:
+                return normalized.signals
+            raise TypeError("Content normalization must include at least one signal")
+        raise TypeError("Connector normalization must return Content or TrendSignal")
+
+    @staticmethod
+    def _metadata_for_normalized(
+        normalized: TrendSignal | Content, raw_item: Mapping[str, object]
+    ) -> dict[str, object]:
+        if isinstance(normalized, Content):
+            return {
+                "content": {
+                    "id": normalized.id,
+                    "platform": normalized.platform,
+                    "creator_name": normalized.creator_name,
+                    "creator_id": normalized.creator_id,
+                    "title": normalized.title,
+                    "description": normalized.description,
+                    "url": normalized.url,
+                    "language": normalized.language,
+                    "country": normalized.country,
+                    "published_at": normalized.published_at.isoformat(),
+                    "duration_seconds": normalized.duration_seconds,
+                    "content_type": normalized.content_type,
+                    "metrics": dict(normalized.metrics),
+                    "analysis": dict(normalized.analysis),
+                    "metadata": dict(normalized.metadata),
+                },
+                "raw_item": dict(raw_item),
+            }
+        return {"raw_item": dict(raw_item)}
 
     @staticmethod
     def _status(

@@ -180,3 +180,28 @@ python -m backend.scripts.demo_intelligence_flow --database-mode isolated
 ## Live polling
 
 Enable the Google Trends polling beat schedule by configuring the environment and running the `beat` service from Docker Compose. The connector remains non-scraping and uses its normal fetch/normalize path.
+
+## AI reasoning layer
+
+The AI reasoning layer sits above the deterministic system and is disabled by
+default. When enabled through configuration, it:
+
+- builds a deterministic reasoning context from persisted topics, signals,
+  evidence, history, opportunity scores, and decisions
+- sends only structured, versioned context to the configured provider
+- validates grounded structured JSON before persistence
+- caches identical requests by stable input hash
+- rejects unsupported or ungrounded output
+
+Relevant endpoints:
+
+- `POST /api/v1/reasoning/decision-explanation`
+- `POST /api/v1/reasoning/opportunity-comparison`
+- `POST /api/v1/reasoning/execution-strategy`
+- `POST /api/v1/reasoning/change-summary`
+- `GET /api/v1/reasoning/{reasoning_result_id}`
+- `GET /api/v1/reasoning/by-decision/{decision_id}`
+- `GET /api/v1/reasoning/by-topic/{topic_id}`
+
+Configuration comes from the `AI_*` environment variables documented in
+`.env.example`.

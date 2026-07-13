@@ -38,3 +38,6 @@ class EvidenceRepository(Repository):
             .order_by(EvidenceModel.id)
         )
         return list(query)
+
+    def get_by_id(self, evidence_id: str) -> EvidenceModel | None:
+        return self.session.get(EvidenceModel, evidence_id)

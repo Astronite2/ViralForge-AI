@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import re
 from contextlib import contextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.orm import Session
@@ -25,6 +25,10 @@ from backend.app.repositories.topic import TopicRepository
 from backend.app.repositories.trend_signal import TrendSignalRepository
 from backend.app.services.decision_engine import DecisionEngine
 from backend.app.services.evidence_factory import EvidenceFactory
+from backend.app.services.knowledge_layer import (
+    KnowledgeIngestionResult,
+    KnowledgeLayerService,
+)
 from backend.app.services.topic_normalization import TopicNormalizationService
 from backend.app.utils.events import DecisionEventEmitter, SignalDetected
 
@@ -72,6 +76,7 @@ class SignalDecisionService:
         self.processed_event_repository = ProcessedEventRepository(session)
         self.topic_normalization = TopicNormalizationService(self.topic_repository)
         self.evidence_factory = EvidenceFactory()
+        self.knowledge_layer = KnowledgeLayerService(session)
 
     def process(self, event: SignalDetected) -> SignalDecisionResult:
         """Persist a signal, evaluate it, and emit a decision event."""
@@ -138,12 +143,26 @@ class SignalDecisionService:
                         "source": signal.source,
                     },
                 )
+                knowledge = self.knowledge_layer.ingest_observation(
+                    topic,
+                    signal,
+                    correlation_id=event.correlation_id,
+                    event_version=event.event_version,
+                    metadata=event.metadata,
+                )
                 engine_content = self.evidence_factory.build_content(
                     topic,
                     event.signal,
                     signal_id=signal.id,
                     correlation_id=event.correlation_id,
                     event_version=event.event_version,
+                )
+                engine_content = replace(
+                    engine_content,
+                    metadata=self._decision_metadata(
+                        engine_content.metadata,
+                        knowledge,
+                    ),
                 )
                 decision = self.decision_engine.evaluate(
                     engine_content,
@@ -177,6 +196,12 @@ class SignalDecisionService:
                         "count": len(evidence_models),
                     },
                 )
+                historical_evidence = self.knowledge_layer.record_evidence_history(
+                    topic,
+                    knowledge.observation,
+                    decision.evidence,
+                    correlation_id=event.correlation_id,
+                )
                 explanation_count = len(decision.explanations)
                 for explanation in decision.explanations:
                     self.decision_explanation_repository.create(
@@ -199,6 +224,7 @@ class SignalDecisionService:
                         "topic_id": topic.id,
                         "decision_id": decision_model.id,
                         "explanations": explanation_count,
+                        "historical_evidence": len(historical_evidence),
                     },
                 )
         except (IntegrityError, OperationalError):
@@ -276,6 +302,33 @@ class SignalDecisionService:
         if match is not None:
             return match.group("topic").strip()
         return reason.strip()
+
+    @staticmethod
+    def _decision_metadata(
+        base_metadata: dict[str, object],
+        knowledge: KnowledgeIngestionResult,
+    ) -> dict[str, object]:
+        return {
+            **base_metadata,
+            "opportunity_score": knowledge.opportunity_score.score,
+            "opportunity_confidence": knowledge.opportunity_score.confidence,
+            "opportunity_version": knowledge.opportunity_score.version,
+            "opportunity_dimensions": dict(knowledge.opportunity_score.dimensions),
+            "opportunity_explanations": dict(knowledge.opportunity_score.explanations),
+            "historical_observation_id": knowledge.observation.id,
+            "historical_observation_hash": knowledge.observation.observation_hash,
+            "historical_trend_age": knowledge.analytics.trend_age,
+            "historical_growth_rate": knowledge.analytics.growth_rate,
+            "historical_acceleration": knowledge.analytics.acceleration,
+            "historical_momentum": knowledge.analytics.momentum,
+            "historical_volatility": knowledge.analytics.historical_volatility,
+            "historical_freshness": knowledge.analytics.freshness,
+            "historical_peak_detected": knowledge.analytics.peak_detected,
+            "historical_decline_detected": knowledge.analytics.decline_detected,
+            "historical_connector_contributions": dict(
+                knowledge.analytics.connector_contributions
+            ),
+        }
 
     def _decision_event(self, decision: DecisionModel) -> DecisionCalculated:
         return DecisionCalculated(

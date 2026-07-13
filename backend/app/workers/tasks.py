@@ -9,7 +9,15 @@ from sqlalchemy.exc import OperationalError
 
 from backend.app.core.config import settings
 from backend.app.db.session import SessionLocal
+from backend.app.domain.reasoning import ReasoningType
+from backend.app.reasoning.errors import (
+    ReasoningConfigurationError,
+    ReasoningDisabledError,
+    ReasoningTransientProviderError,
+    ReasoningValidationError,
+)
 from backend.app.services.connector_orchestrator import ConnectorOrchestrator
+from backend.app.services.reasoning import ReasoningService
 from backend.app.services.signal_decision import SignalDecisionService
 from backend.app.utils.events import SignalDetected
 from backend.app.workers.celery_app import celery_app
@@ -128,3 +136,92 @@ def _report_payload(report: Any) -> dict[str, Any]:
             for connector in report.connector_reports
         ],
     }
+
+
+@celery_app.task(
+    bind=True,
+    name="backend.app.workers.tasks.run_reasoning_request",
+    max_retries=settings.ai_max_retries,
+    default_retry_delay=settings.processing_retry_delay_seconds,
+)
+def run_reasoning_request(self: Any, payload: Mapping[str, Any]) -> dict[str, Any]:
+    """Run one reasoning request through the service layer."""
+    reasoning_type = str(payload.get("reasoning_type", ""))
+    logger.info(
+        "reasoning task started",
+        extra={
+            "task_id": self.request.id,
+            "reasoning_type": reasoning_type,
+            "correlation_id": str(payload.get("correlation_id", "")),
+        },
+    )
+    try:
+        with SessionLocal() as session:
+            service = ReasoningService(session)
+            if reasoning_type == ReasoningType.DECISION_EXPLANATION.value:
+                result = service.explain_decision(
+                    str(payload["decision_id"]),
+                    force_refresh=bool(payload.get("force_refresh", False)),
+                )
+            elif reasoning_type == ReasoningType.OPPORTUNITY_COMPARISON.value:
+                result = service.compare_opportunities(
+                    topic_ids=list(payload.get("topic_ids") or []),
+                    opportunity_ids=list(payload.get("opportunity_ids") or []),
+                    force_refresh=bool(payload.get("force_refresh", False)),
+                )
+            elif reasoning_type == ReasoningType.EXECUTION_STRATEGY.value:
+                result = service.execution_strategy(
+                    str(payload["decision_id"]),
+                    target_platform=payload.get("target_platform") or None,
+                    force_refresh=bool(payload.get("force_refresh", False)),
+                )
+            elif reasoning_type == ReasoningType.CHANGE_SUMMARY.value:
+                result = service.change_summary(
+                    str(payload["topic_id"]),
+                    previous_decision_id=payload.get("previous_decision_id") or None,
+                    current_decision_id=payload.get("current_decision_id") or None,
+                    force_refresh=bool(payload.get("force_refresh", False)),
+                )
+            else:
+                raise ValueError(f"Unsupported reasoning type: {reasoning_type}")
+            return {
+                "result_id": result.result.id if result.result is not None else None,
+                "run_id": result.run.id,
+                "cached": result.cached,
+            }
+    except (
+        OperationalError,
+        RedisError,
+        ConnectionError,
+        ReasoningTransientProviderError,
+    ) as exc:
+        logger.info(
+            "reasoning retry scheduled",
+            extra={
+                "task_id": self.request.id,
+                "reasoning_type": reasoning_type,
+                "correlation_id": str(payload.get("correlation_id", "")),
+            },
+        )
+        raise self.retry(exc=exc) from exc
+    except (
+        ReasoningDisabledError,
+        ReasoningConfigurationError,
+        ReasoningValidationError,
+        ValueError,
+        KeyError,
+    ) as exc:
+        logger.error(
+            "reasoning task failed",
+            extra={
+                "task_id": self.request.id,
+                "reasoning_type": reasoning_type,
+                "correlation_id": str(payload.get("correlation_id", "")),
+                "reason": str(exc),
+            },
+        )
+        return {
+            "status": "failed",
+            "reasoning_type": reasoning_type,
+            "error": str(exc),
+        }

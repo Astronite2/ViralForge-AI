@@ -6,6 +6,12 @@ from backend.app.repositories.decision_explanation import DecisionExplanationRep
 from backend.app.repositories.evidence import EvidenceRepository
 from backend.app.repositories.opportunity import OpportunityRepository
 from backend.app.repositories.processed_event import ProcessedEventRepository
+from backend.app.repositories.reasoning import (
+    ReasoningResultRepository,
+    ReasoningRunRepository,
+    ReasoningSourceLinkRepository,
+    ReasoningValidationErrorRepository,
+)
 from backend.app.repositories.topic import TopicRepository
 from backend.app.repositories.trend import TrendRepository
 from backend.app.repositories.trend_signal import TrendSignalRepository
@@ -19,6 +25,10 @@ __all__ = [
     "EvidenceRepository",
     "OpportunityRepository",
     "ProcessedEventRepository",
+    "ReasoningResultRepository",
+    "ReasoningRunRepository",
+    "ReasoningSourceLinkRepository",
+    "ReasoningValidationErrorRepository",
     "TopicRepository",
     "TrendRepository",
     "TrendSignalRepository",

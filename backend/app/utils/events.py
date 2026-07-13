@@ -8,6 +8,7 @@ from uuid import uuid4
 
 from backend.app.core.config import settings
 from backend.app.domain.decision_calculated import DecisionCalculated
+from backend.app.domain.reasoning import ReasoningStatus
 from backend.app.domain.trend_signal import TrendSignal
 
 
@@ -16,6 +17,7 @@ class SignalDetected:
     """Event emitted when a connector normalizes a signal."""
 
     signal: TrendSignal
+    metadata: dict[str, Any] = field(default_factory=dict)
     event_id: str = field(default_factory=lambda: str(uuid4()))
     occurred_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     correlation_id: str = field(default_factory=lambda: str(uuid4()))
@@ -32,6 +34,7 @@ class SignalDetected:
                 "timestamp": self.signal.timestamp.isoformat(),
                 "reason": self.signal.reason,
             },
+            "metadata": self.metadata,
             "occurred_at": self.occurred_at.isoformat(),
             "correlation_id": self.correlation_id,
             "event_version": self.event_version,
@@ -55,6 +58,7 @@ class SignalDetected:
             occurred_at=datetime.fromisoformat(
                 str(payload["occurred_at"]).replace("Z", "+00:00")
             ),
+            metadata=dict(payload.get("metadata", {})),
             correlation_id=str(payload["correlation_id"]),
             event_version=str(payload["event_version"]),
         )
@@ -76,6 +80,74 @@ class DecisionEventEmitter:
         raise NotImplementedError
 
 
+@dataclass(frozen=True, slots=True)
+class ReasoningRequested:
+    """Event emitted when reasoning starts."""
+
+    reasoning_run_id: str
+    reasoning_type: str
+    topic_id: str | None
+    decision_id: str | None
+    correlation_id: str
+    model: str
+    prompt_version: str
+    status: str = ReasoningStatus.PENDING.value
+    event_id: str = field(default_factory=lambda: str(uuid4()))
+    occurred_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    event_version: str = field(default_factory=lambda: settings.event_version)
+
+
+@dataclass(frozen=True, slots=True)
+class ReasoningCompleted:
+    """Event emitted when reasoning completes successfully."""
+
+    reasoning_run_id: str
+    reasoning_type: str
+    topic_id: str | None
+    decision_id: str | None
+    correlation_id: str
+    model: str
+    prompt_version: str
+    status: str = ReasoningStatus.SUCCEEDED.value
+    event_id: str = field(default_factory=lambda: str(uuid4()))
+    occurred_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    event_version: str = field(default_factory=lambda: settings.event_version)
+
+
+@dataclass(frozen=True, slots=True)
+class ReasoningFailed:
+    """Event emitted when reasoning fails."""
+
+    reasoning_run_id: str
+    reasoning_type: str
+    topic_id: str | None
+    decision_id: str | None
+    correlation_id: str
+    model: str
+    prompt_version: str
+    status: str = ReasoningStatus.FAILED.value
+    event_id: str = field(default_factory=lambda: str(uuid4()))
+    occurred_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    event_version: str = field(default_factory=lambda: settings.event_version)
+
+
+@dataclass(frozen=True, slots=True)
+class ReasoningValidationFailed:
+    """Event emitted when reasoning output fails grounding validation."""
+
+    reasoning_run_id: str
+    reasoning_type: str
+    topic_id: str | None
+    decision_id: str | None
+    correlation_id: str
+    model: str
+    prompt_version: str
+    status: str = ReasoningStatus.VALIDATION_FAILED.value
+    event_id: str = field(default_factory=lambda: str(uuid4()))
+    occurred_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    event_version: str = field(default_factory=lambda: settings.event_version)
+
+
 class InMemorySignalEventEmitter(SignalEventEmitter):
     """Collect signal events for tests and local orchestration."""
 
@@ -93,6 +165,24 @@ class InMemoryDecisionEventEmitter(DecisionEventEmitter):
         self.events: list[DecisionCalculated] = []
 
     def emit(self, event: DecisionCalculated) -> None:
+        self.events.append(event)
+
+
+class ReasoningEventEmitter:
+    """Protocol-like base for reasoning event emission."""
+
+    def emit(self, event: object) -> None:
+        """Publish a reasoning event."""
+        raise NotImplementedError
+
+
+class InMemoryReasoningEventEmitter(ReasoningEventEmitter):
+    """Collect reasoning events for tests and local orchestration."""
+
+    def __init__(self) -> None:
+        self.events: list[object] = []
+
+    def emit(self, event: object) -> None:
         self.events.append(event)
 
 

@@ -12,7 +12,29 @@ from backend.app.domain.decision_calculated import DecisionCalculated
 from backend.app.domain.decision_enums import DecisionType, SignalStrength
 from backend.app.domain.decision_explanation import DecisionExplanation
 from backend.app.domain.evidence import Evidence
+from backend.app.domain.knowledge import (
+    HistoricalAnalytics,
+    HistoricalEvidenceSnapshot,
+    HistoricalObservation,
+    OpportunityScore,
+    TopicRelationship,
+    TopicRelationshipType,
+)
 from backend.app.domain.platform_content import PlatformContent
+from backend.app.domain.reasoning import (
+    ReasoningAlternativeTopicComparison,
+    ReasoningContext,
+    ReasoningEvidenceReference,
+    ReasoningMessage,
+    ReasoningPromptBundle,
+    ReasoningProviderResponse,
+    ReasoningRequest,
+    ReasoningResult,
+    ReasoningRun,
+    ReasoningStatus,
+    ReasoningType,
+    ReasoningValidationIssue,
+)
 from backend.app.domain.topic import Topic
 from backend.app.domain.trend_signal import TrendSignal
 
@@ -27,8 +49,26 @@ __all__ = [
     "DecisionExplanation",
     "DecisionType",
     "Evidence",
+    "HistoricalAnalytics",
+    "HistoricalEvidenceSnapshot",
+    "HistoricalObservation",
     "PlatformContent",
+    "ReasoningAlternativeTopicComparison",
+    "ReasoningContext",
+    "ReasoningEvidenceReference",
+    "ReasoningMessage",
+    "ReasoningPromptBundle",
+    "ReasoningProviderResponse",
+    "ReasoningRequest",
+    "ReasoningResult",
+    "ReasoningRun",
+    "ReasoningStatus",
+    "ReasoningValidationIssue",
+    "ReasoningType",
+    "OpportunityScore",
     "Topic",
+    "TopicRelationship",
+    "TopicRelationshipType",
     "SignalStrength",
     "TrendSignal",
 ]
