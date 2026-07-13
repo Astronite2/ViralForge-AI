@@ -1,5 +1,9 @@
 # Connector SDK
 
+The platform now uses Connector SDK v2 metadata and typed capability discovery.
+See [Connector SDK v2](connector-sdk-v2.md) for the contract, current declarations,
+API, and extension guide. The v1 processing interface remains backward compatible.
+
 The Connector SDK v1 provides a pluggable boundary for platform integrations without
 allowing platform-specific logic to leak into services, repositories, or routes.
 

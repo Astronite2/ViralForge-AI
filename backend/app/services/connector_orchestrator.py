@@ -102,8 +102,13 @@ class ConnectorOrchestrator:
                 "correlation_id": connector_correlation_id,
             },
         )
-        provider = getattr(connector, "provider_name", None)
-        provider_experimental = bool(getattr(connector, "provider_experimental", False))
+        metadata = connector.metadata
+        provider = metadata.provider
+        provider_experimental = metadata.provider_experimental
+        report_metadata = {
+            "connector_version": metadata.version,
+            "capabilities": metadata.capabilities.api_values(),
+        }
         try:
             raw_items = connector.fetch(**kwargs)
         except ConnectorAvailabilityError as exc:
@@ -130,6 +135,7 @@ class ConnectorOrchestrator:
                 provider=provider,
                 provider_experimental=provider_experimental,
                 error_code=exc.error_code,
+                **report_metadata,
             )
         except Exception as exc:
             duration_ms = int((time.perf_counter() - started_at) * 1000)
@@ -152,6 +158,7 @@ class ConnectorOrchestrator:
                 provider=provider,
                 provider_experimental=provider_experimental,
                 error_code="unexpected_failure",
+                **report_metadata,
             )
 
         items_processed = 0
@@ -260,6 +267,7 @@ class ConnectorOrchestrator:
             provider=provider,
             provider_experimental=provider_experimental,
             error_code="item_failure" if errors else None,
+            **report_metadata,
         )
 
     @staticmethod

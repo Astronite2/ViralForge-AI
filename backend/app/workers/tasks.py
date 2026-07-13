@@ -118,7 +118,6 @@ def poll_google_trends(
     return _report_payload(report)
 
 
-
 @celery_app.task(
     bind=True,
     name="backend.app.workers.tasks.poll_youtube",
@@ -137,9 +136,7 @@ def poll_youtube(
     if not search_query:
         raise ValueError("YouTube query is required")
 
-    batch_limit = (
-        limit if limit is not None else settings.youtube_default_limit
-    )
+    batch_limit = limit if limit is not None else settings.youtube_default_limit
     search_region = region or settings.youtube_default_region
 
     logger.info(
@@ -175,6 +172,7 @@ def poll_youtube(
 
     return _report_payload(report)
 
+
 def _report_payload(report: Any) -> dict[str, Any]:
     return {
         "started_at": report.started_at.isoformat(),
@@ -193,6 +191,8 @@ def _report_payload(report: Any) -> dict[str, Any]:
                 "provider": connector.provider,
                 "provider_experimental": connector.provider_experimental,
                 "error_code": connector.error_code,
+                "connector_version": connector.connector_version,
+                "capabilities": list(connector.capabilities),
             }
             for connector in report.connector_reports
         ],

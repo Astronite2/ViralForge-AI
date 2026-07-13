@@ -22,6 +22,11 @@ from backend.app.connectors.google_trends_providers import (
     PytrendsClient,
     PytrendsGoogleTrendsProvider,
 )
+from backend.app.connectors.metadata import (
+    ConnectorCapabilities,
+    ConnectorCapability,
+    ConnectorMetadata,
+)
 from backend.app.domain.trend_signal import TrendSignal
 
 DAILY_TRENDS = "daily_trending_searches"
@@ -77,6 +82,33 @@ class GoogleTrendsConnector(BaseConnector[TrendSignal]):
     def provider_experimental(self) -> bool:
         """Return whether the selected provider uses unofficial APIs."""
         return self._provider.experimental
+
+    @property
+    def is_enabled(self) -> bool:
+        return self.provider_name != "disabled"
+
+    @property
+    def metadata(self) -> ConnectorMetadata:
+        return ConnectorMetadata(
+            name="google_trends",
+            display_name="Google Trends",
+            version="2.0.0",
+            provider=self.provider_name,
+            provider_experimental=self.provider_experimental,
+            description="Search-interest trends and related topic discovery.",
+            capabilities=ConnectorCapabilities.of(
+                ConnectorCapability.TRENDING,
+                ConnectorCapability.HISTORICAL,
+                ConnectorCapability.AUDIENCE_SIGNALS,
+                ConnectorCapability.GEO_FILTERING,
+                ConnectorCapability.DATE_FILTERING,
+                ConnectorCapability.TOPIC_MONITORING,
+                ConnectorCapability.FORECAST_INPUT,
+                ConnectorCapability.CONTENT_DISCOVERY,
+            ),
+            supports_live_access=self.provider_name in {"pytrends", "official"},
+            supports_fixture_access=True,
+        )
 
     def fetch(self, **kwargs: Any) -> list[Mapping[str, Any]]:
         """Fetch one supported trend view through the configured provider."""

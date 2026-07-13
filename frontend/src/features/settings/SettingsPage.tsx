@@ -1,6 +1,6 @@
 import { BrainCircuit, CircleOff, Database, Monitor, Server, SunMoon } from "lucide-react";
 import {
-  useConnectorStatuses,
+  useConnectors,
   useDecisions,
   useOpportunities,
   useReasoningFeed,
@@ -10,13 +10,14 @@ import {
 import type { ConnectorStatus } from "../../api/types";
 import { EmptyState, LoadingState, PageHeader, StatusPill } from "../../components/ui";
 import { formatName } from "../../lib/format";
+import { ConnectorCapabilities, ExperimentalProviderBadge } from "./ConnectorCapabilities";
 
 export default function SettingsPage() {
   const topics = useTopics();
   const decisions = useDecisions();
   const opportunities = useOpportunities();
   const health = useSystemHealth();
-  const connectors = useConnectorStatuses();
+  const connectors = useConnectors();
   const reasoning = useReasoningFeed((topics.data ?? []).map((item) => item.id));
 
   if (topics.isLoading) return <LoadingState rows={8} />;
@@ -48,13 +49,17 @@ export default function SettingsPage() {
         <SettingsCard icon={<Database />} title="Connector status">
           {connectors.data?.length ? connectors.data.map((connector) => (
             <Row
-              key={connector.connector_name}
-              label={formatName(connector.connector_name)}
+              key={connector.name}
+              label={connector.display_name || formatName(connector.name)}
               value={
-                <span className="inline-flex items-center gap-2">
-                  <span className="text-[10px] text-muted">{providerLabel(connector)}</span>
-                  <StatusPill status={connectorTone(connector.status)} label={connector.status} />
-                </span>
+                <div className="flex max-w-md flex-col items-end gap-2">
+                  <span className="inline-flex items-center gap-2">
+                    <span className="text-[10px] text-muted">{connector.provider} · v{connector.version}</span>
+                    {connector.provider_experimental ? <ExperimentalProviderBadge /> : null}
+                    <StatusPill status={connectorTone(connector.runtime_status.status)} label={connector.runtime_status.status} />
+                  </span>
+                  <ConnectorCapabilities capabilities={connector.capabilities} />
+                </div>
               }
             />
           )) : connectors.isLoading ? <LoadingState rows={2} /> : <EmptyState title="No connector runtime status" />}
@@ -90,11 +95,6 @@ function connectorTone(status: ConnectorStatus["status"]): "good" | "warn" | "ba
   if (status === "active") return "good";
   if (status === "degraded" || status === "unavailable") return "warn";
   return "neutral";
-}
-
-function providerLabel(connector: ConnectorStatus): string {
-  const experimental = connector.provider_experimental ? " · experimental" : "";
-  return `${connector.provider ?? "no provider"}${experimental}`;
 }
 
 function SettingsCard({ icon, title, children }: { icon: React.ReactNode; title: string; children: React.ReactNode }) {

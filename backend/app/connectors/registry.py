@@ -11,6 +11,10 @@ from backend.app.connectors.google_trends_providers import (
     OfficialGoogleTrendsProvider,
     PytrendsGoogleTrendsProvider,
 )
+from backend.app.connectors.metadata import (
+    ConnectorCapability,
+    ConnectorMetadata,
+)
 from backend.app.connectors.youtube import YouTubeConnector
 from backend.app.core.config import settings
 
@@ -40,15 +44,35 @@ class ConnectorRegistry:
             raise KeyError(f"Unknown connector: {name}") from exc
 
     def names(self) -> tuple[str, ...]:
-        """Return registered connector names in insertion order."""
-        return tuple(self._connectors.keys())
+        """Return registered connector names deterministically."""
+        return tuple(sorted(self._connectors))
 
     def items(self) -> tuple[tuple[str, BaseConnector[Any]], ...]:
         """Return registered connector pairs."""
-        return tuple(self._connectors.items())
+        return tuple((name, self._connectors[name]) for name in self.names())
+
+    def list_metadata(self) -> tuple[ConnectorMetadata, ...]:
+        return tuple(connector.metadata for _, connector in self.items())
+
+    def filter_by_capability(
+        self, capability: ConnectorCapability | str
+    ) -> tuple[BaseConnector[Any], ...]:
+        member = ConnectorCapability(capability)
+        return tuple(
+            connector
+            for _, connector in self.items()
+            if connector.capabilities.supports(member)
+        )
+
+    def supports_capability(
+        self, name: str, capability: ConnectorCapability | str
+    ) -> bool:
+        return self.get(name).capabilities.supports(ConnectorCapability(capability))
 
 
-def build_default_connector_registry() -> ConnectorRegistry:
+def build_default_connector_registry(
+    *, include_disabled: bool = False
+) -> ConnectorRegistry:
     """Create the default registry with the Google Trends connector."""
     registry = ConnectorRegistry()
     registry.register(
@@ -62,7 +86,7 @@ def build_default_connector_registry() -> ConnectorRegistry:
             backoff_seconds=settings.google_trends_backoff_seconds,
         ),
     )
-    if settings.youtube_api_key:
+    if settings.youtube_api_key or include_disabled:
         registry.register(
             settings.youtube_source_name,
             YouTubeConnector(api_key=settings.youtube_api_key),

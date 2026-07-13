@@ -15,6 +15,11 @@ from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
 from backend.app.connectors.base import BaseConnector
+from backend.app.connectors.metadata import (
+    ConnectorCapabilities,
+    ConnectorCapability,
+    ConnectorMetadata,
+)
 from backend.app.core.config import settings
 from backend.app.domain.content import Content
 from backend.app.domain.trend_signal import TrendSignal
@@ -200,6 +205,29 @@ class YouTubeConnector(BaseConnector[Content]):
     def is_enabled(self) -> bool:
         """Return whether the connector can make live API requests."""
         return self._client is not None or self._api_key is not None
+
+    @property
+    def metadata(self) -> ConnectorMetadata:
+        return ConnectorMetadata(
+            name="youtube",
+            display_name="YouTube",
+            version="2.0.0",
+            provider="youtube_data_api" if self.is_enabled else "disabled",
+            description="YouTube video discovery, channel, and engagement signals.",
+            capabilities=ConnectorCapabilities.of(
+                ConnectorCapability.SEARCH,
+                ConnectorCapability.CHANNELS,
+                ConnectorCapability.AUTHORS,
+                ConnectorCapability.ENGAGEMENT_METRICS,
+                ConnectorCapability.AUDIENCE_SIGNALS,
+                ConnectorCapability.GEO_FILTERING,
+                ConnectorCapability.KEYWORD_MONITORING,
+                ConnectorCapability.FORECAST_INPUT,
+                ConnectorCapability.CONTENT_DISCOVERY,
+            ),
+            supports_live_access=True,
+            supports_fixture_access=True,
+        )
 
     def fetch(self, **kwargs: Any) -> list[Mapping[str, Any]]:
         if not self.is_enabled:

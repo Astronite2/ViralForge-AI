@@ -21,6 +21,8 @@ class ConnectorExecutionReport:
     provider: str | None = None
     provider_experimental: bool = False
     error_code: str | None = None
+    connector_version: str | None = None
+    capabilities: tuple[str, ...] = field(default_factory=tuple)
 
 
 @dataclass(frozen=True, slots=True)

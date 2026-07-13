@@ -10,6 +10,7 @@ from typing import Any, ClassVar
 from redis import Redis
 from redis.exceptions import RedisError
 
+from backend.app.connectors.metadata import ConnectorMetadata
 from backend.app.core.config import settings
 from backend.app.domain.connector_orchestration import ConnectorExecutionReport
 
@@ -73,29 +74,24 @@ class ConnectorStatusStore:
         except (RedisError, OSError):
             return
 
-    def list_statuses(self) -> tuple[ConnectorRuntimeStatus, ...]:
+    def list_statuses(
+        self, metadata: tuple[ConnectorMetadata, ...] | None = None
+    ) -> tuple[ConnectorRuntimeStatus, ...]:
         """Return configured connector states with freshness applied."""
-        configurations = (
-            (
-                settings.google_trends_source_name,
-                settings.google_trends_enabled,
-                (
-                    settings.google_trends_provider
-                    if settings.google_trends_enabled
-                    else "disabled"
-                ),
-                settings.google_trends_provider == "pytrends",
-            ),
-            (
-                settings.youtube_source_name,
-                bool(settings.youtube_api_key),
-                "youtube_data_api" if settings.youtube_api_key else "disabled",
-                False,
-            ),
-        )
+        if metadata is None:
+            from backend.app.connectors.registry import build_default_connector_registry
+
+            metadata = build_default_connector_registry(
+                include_disabled=True
+            ).list_metadata()
         return tuple(
-            self._status(name, enabled, provider, experimental)
-            for name, enabled, provider, experimental in configurations
+            self._status(
+                item.name,
+                item.provider != "disabled",
+                item.provider,
+                item.provider_experimental,
+            )
+            for item in metadata
         )
 
     def _status(
