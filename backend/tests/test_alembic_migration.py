@@ -72,7 +72,7 @@ def test_migration_upgrade_downgrade_reupgrade_and_current(
     _run_alembic("downgrade", "base", db_url=db_url)
     _run_alembic("upgrade", "head", db_url=db_url)
     output = _run_alembic("current", db_url=db_url, expect_revision=True)
-    assert "0003_ai_reasoning" in output
+    assert "0005_project_workspace" in output
 
 
 def _run_alembic(*args: str, db_url: str, expect_revision: bool = False) -> str:
@@ -87,7 +87,7 @@ def _run_alembic(*args: str, db_url: str, expect_revision: bool = False) -> str:
     )
     output = result.stdout + result.stderr
     if expect_revision:
-        assert "0003_ai_reasoning" in output
+        assert "0005_project_workspace" in output
     return output
 
 

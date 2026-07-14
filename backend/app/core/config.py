@@ -103,6 +103,54 @@ class Settings(BaseSettings):
     youtube_default_limit: int = Field(default=10, ge=1, le=50)
     youtube_api_base_url: str = "https://www.googleapis.com/youtube/v3"
     youtube_timeout_seconds: float = Field(default=10.0, gt=0.0, le=60.0)
+    reddit_enabled: bool = False
+    reddit_provider: str = "official"
+    reddit_client_id: str | None = None
+    reddit_client_secret: str | None = None
+    reddit_username: str | None = None
+    reddit_password: str | None = None
+    reddit_user_agent: str = Field(default="ViralForgeAI/0.1", min_length=5)
+    reddit_default_subreddits: str = ""
+    reddit_default_query: str = ""
+    reddit_default_sort: str = "hot"
+    reddit_default_time_filter: str = "week"
+    reddit_default_limit: int = Field(default=25, ge=1, le=100)
+    reddit_timeout_seconds: float = Field(default=20.0, gt=0.0, le=120.0)
+    reddit_max_retries: int = Field(default=2, ge=0, le=10)
+    reddit_backoff_seconds: float = Field(default=1.0, ge=0.0, le=60.0)
+    reddit_source_name: str = "reddit"
+    money_engine_version: str = "money-v1"
+    revenue_benchmark_version: str = "rpm-benchmarks-v1"
+    money_opportunity_weights: dict[str, float] = Field(
+        default_factory=lambda: {
+            "demand": 0.14,
+            "momentum": 0.10,
+            "competition_opportunity": 0.10,
+            "evergreen": 0.10,
+            "advertiser_value": 0.12,
+            "audience_value": 0.08,
+            "watch_time_potential": 0.07,
+            "click_through_potential": 0.06,
+            "production_feasibility": 0.08,
+            "monetization_safety": 0.07,
+            "evidence_confidence": 0.05,
+            "channel_fit": 0.03,
+        }
+    )
+    rpm_benchmarks: dict[str, tuple[float, float, float]] = Field(
+        default_factory=lambda: {
+            "entertainment": (1.0, 2.5, 4.5),
+            "history": (1.5, 3.5, 6.0),
+            "education": (2.0, 4.5, 8.0),
+            "technology": (2.5, 6.0, 12.0),
+            "finance": (5.0, 12.0, 22.0),
+            "business": (4.0, 9.0, 16.0),
+            "careers": (3.0, 7.0, 12.0),
+            "travel": (1.5, 4.0, 8.0),
+            "gaming": (0.8, 2.2, 4.5),
+            "general": (1.0, 3.0, 6.0),
+        }
+    )
 
     model_config = SettingsConfigDict(
         env_file=".env", env_file_encoding="utf-8", extra="ignore"

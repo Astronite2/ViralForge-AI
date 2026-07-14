@@ -10,10 +10,17 @@ from backend.app.models.evidence import EvidenceModel
 from backend.app.models.historical_evidence import HistoricalEvidenceModel
 from backend.app.models.historical_observation import HistoricalObservationModel
 from backend.app.models.metric import Metric
+from backend.app.models.money_opportunity import (
+    MoneyAnalysisModel,
+    MoneyOpportunityModel,
+    MoneyOutcomeModel,
+    ProductionBriefModel,
+)
 from backend.app.models.opportunity import Opportunity, OpportunityModel
 from backend.app.models.opportunity_score import OpportunityScoreModel
 from backend.app.models.platform import Platform
 from backend.app.models.processed_event import ProcessedEventModel
+from backend.app.models.project import ProjectModel
 from backend.app.models.reasoning import (
     ReasoningResultModel,
     ReasoningRunModel,
@@ -37,11 +44,16 @@ __all__ = [
     "HistoricalEvidenceModel",
     "HistoricalObservationModel",
     "Metric",
+    "MoneyAnalysisModel",
+    "MoneyOpportunityModel",
+    "MoneyOutcomeModel",
     "Opportunity",
     "OpportunityModel",
     "OpportunityScoreModel",
     "Platform",
     "ProcessedEventModel",
+    "ProductionBriefModel",
+    "ProjectModel",
     "ReasoningResultModel",
     "ReasoningRunModel",
     "ReasoningSourceLinkModel",

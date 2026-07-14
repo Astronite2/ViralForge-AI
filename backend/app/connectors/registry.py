@@ -15,6 +15,12 @@ from backend.app.connectors.metadata import (
     ConnectorCapability,
     ConnectorMetadata,
 )
+from backend.app.connectors.reddit import RedditConnector
+from backend.app.connectors.reddit_providers import (
+    DisabledRedditProvider,
+    OfficialRedditProvider,
+    RedditProvider,
+)
 from backend.app.connectors.youtube import YouTubeConnector
 from backend.app.core.config import settings
 
@@ -91,7 +97,47 @@ def build_default_connector_registry(
             settings.youtube_source_name,
             YouTubeConnector(api_key=settings.youtube_api_key),
         )
+    reddit_ready = bool(
+        settings.reddit_enabled
+        and settings.reddit_client_id
+        and settings.reddit_client_secret
+    )
+    if reddit_ready or include_disabled:
+        registry.register(settings.reddit_source_name, build_reddit_connector())
     return registry
+
+
+def build_reddit_connector() -> RedditConnector:
+    """Build Reddit without permitting fixture selection from configuration."""
+    return RedditConnector(
+        provider=build_reddit_provider(),
+        default_subreddits=settings.reddit_default_subreddits,
+        default_query=settings.reddit_default_query,
+        default_sort=settings.reddit_default_sort,
+        default_time_filter=settings.reddit_default_time_filter,
+        default_limit=settings.reddit_default_limit,
+    )
+
+
+def build_reddit_provider() -> RedditProvider:
+    provider_name = settings.reddit_provider.strip().lower()
+    if provider_name == "fixture":
+        raise ValueError(
+            "FixtureRedditProvider is test-only and cannot be selected by "
+            "application configuration"
+        )
+    if provider_name != "official":
+        raise ValueError(f"Unsupported REDDIT_PROVIDER: {provider_name}")
+    if not settings.reddit_enabled:
+        return DisabledRedditProvider()
+    return OfficialRedditProvider(
+        client_id=settings.reddit_client_id,
+        client_secret=settings.reddit_client_secret,
+        user_agent=settings.reddit_user_agent,
+        timeout_seconds=settings.reddit_timeout_seconds,
+        max_retries=settings.reddit_max_retries,
+        backoff_seconds=settings.reddit_backoff_seconds,
+    )
 
 
 def build_google_trends_provider() -> GoogleTrendsProvider:

@@ -76,10 +76,14 @@ def test_connector_discovery_and_capability_catalog_api() -> None:
         unknown = client.get("/api/v1/connectors?capability=NOT_REAL")
 
     assert listing.status_code == 200
-    assert [item["name"] for item in listing.json()] == ["google_trends", "youtube"]
+    assert [item["name"] for item in listing.json()] == [
+        "google_trends",
+        "reddit",
+        "youtube",
+    ]
     assert all("runtime_status" in item for item in listing.json())
     assert "COMMENTS" in [item["value"] for item in catalog.json()]
-    assert [item["name"] for item in filtered.json()] == ["youtube"]
+    assert [item["name"] for item in filtered.json()] == ["reddit", "youtube"]
     assert unknown.status_code == 422
     assert "api_key" not in listing.text.lower()
     assert "credential" not in listing.text.lower()

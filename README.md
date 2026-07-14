@@ -1,5 +1,9 @@
 # ViralForge AI
 
+ViralForge helps creators decide what YouTube video to produce next by ranking
+opportunities according to expected revenue potential, competition, longevity,
+production effort and evidence confidence.
+
 [![CI](https://github.com/Astronite2/ViralForge-AI/actions/workflows/ci.yml/badge.svg)](https://github.com/Astronite2/ViralForge-AI/actions/workflows/ci.yml)
 
 ViralForge AI is a Content Intelligence Platform foundation designed for high-volume platform collection, event-driven processing, background work, and future AI-assisted analysis. This repository intentionally provides architecture only; it contains no product business logic, authentication implementation, or AI workflows.
@@ -34,6 +38,10 @@ REST API contracts remain backward compatible.
 Google Trends transport selection and degraded runtime behavior are documented in
 the [Connector SDK guide](docs/connectors.md). The default pytrends provider is an
 experimental fallback; no data is fabricated when it is unavailable.
+
+Reddit Intelligence is disabled by default and uses Reddit's documented Data API
+through OAuth only. See the [Reddit connector guide](docs/reddit-connector.md) for
+configuration, supported post retrieval, and retention responsibilities.
 
 ## Folder structure
 

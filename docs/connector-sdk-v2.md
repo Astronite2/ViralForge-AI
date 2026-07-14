@@ -24,6 +24,9 @@ execution, not a static capability.
 - YouTube: `SEARCH`, `CHANNELS`, `AUTHORS`, `ENGAGEMENT_METRICS`,
   `AUDIENCE_SIGNALS`, `GEO_FILTERING`, `KEYWORD_MONITORING`, `FORECAST_INPUT`,
   `CONTENT_DISCOVERY`.
+- Reddit: `SEARCH`, `COMMUNITIES`, `AUTHORS`, `ENGAGEMENT_METRICS`,
+  `KEYWORD_MONITORING`, `TOPIC_MONITORING`, `DATE_FILTERING`, `FORECAST_INPUT`,
+  `CONTENT_DISCOVERY`.
 
 YouTube does not declare `COMMENTS`: the connector reads a comment count but not
 comment content. It does not declare `MONETIZATION_SIGNALS` because it exposes no

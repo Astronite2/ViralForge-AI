@@ -7,6 +7,7 @@ from typing import Any
 from redis.exceptions import RedisError
 from sqlalchemy.exc import OperationalError
 
+from backend.app.connectors.registry import build_default_connector_registry
 from backend.app.core.config import settings
 from backend.app.db.session import SessionLocal
 from backend.app.domain.reasoning import ReasoningType
@@ -170,6 +171,51 @@ def poll_youtube(
         },
     )
 
+    return _report_payload(report)
+
+
+@celery_app.task(
+    bind=True,
+    name="backend.app.workers.tasks.poll_reddit",
+    max_retries=settings.processing_retry_limit,
+    default_retry_delay=settings.processing_retry_delay_seconds,
+)
+def poll_reddit(
+    self: Any,
+    *,
+    query: str | None = None,
+    subreddits: list[str] | None = None,
+    sort: str | None = None,
+    time_filter: str | None = None,
+    limit: int | None = None,
+) -> dict[str, Any]:
+    """Poll Reddit posts through the configured OAuth provider."""
+    logger.info(
+        "Reddit polling started",
+        extra={"task_id": self.request.id, "source": settings.reddit_source_name},
+    )
+    report = ConnectorOrchestrator(
+        registry=build_default_connector_registry(include_disabled=True)
+    ).run(
+        {
+            settings.reddit_source_name: {
+                "query": query if query is not None else settings.reddit_default_query,
+                "subreddits": (
+                    subreddits
+                    if subreddits is not None
+                    else settings.reddit_default_subreddits
+                ),
+                "sort": sort or settings.reddit_default_sort,
+                "time_filter": time_filter or settings.reddit_default_time_filter,
+                "limit": limit or settings.reddit_default_limit,
+            }
+        },
+        enabled_connectors=(settings.reddit_source_name,),
+    )
+    logger.info(
+        "Reddit polling completed",
+        extra={"task_id": self.request.id, "source": settings.reddit_source_name},
+    )
     return _report_payload(report)
 
 

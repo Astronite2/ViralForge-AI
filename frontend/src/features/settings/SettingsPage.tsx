@@ -10,7 +10,7 @@ import {
 import type { ConnectorStatus } from "../../api/types";
 import { EmptyState, LoadingState, PageHeader, StatusPill } from "../../components/ui";
 import { formatName } from "../../lib/format";
-import { ConnectorCapabilities, ExperimentalProviderBadge } from "./ConnectorCapabilities";
+import { ConnectorCapabilities, ConnectorRuntimeDetails, ExperimentalProviderBadge } from "./ConnectorCapabilities";
 
 export default function SettingsPage() {
   const topics = useTopics();
@@ -59,6 +59,12 @@ export default function SettingsPage() {
                     <StatusPill status={connectorTone(connector.runtime_status.status)} label={connector.runtime_status.status} />
                   </span>
                   <ConnectorCapabilities capabilities={connector.capabilities} />
+                  <ConnectorRuntimeDetails
+                    enabled={connector.enabled}
+                    lastRun={connector.runtime_status.last_run_at}
+                    lastSuccess={connector.runtime_status.last_success_at}
+                    message={connector.runtime_status.message}
+                  />
                 </div>
               }
             />

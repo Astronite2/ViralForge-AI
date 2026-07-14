@@ -109,6 +109,13 @@ minutes. The task uses the default connector registry and returns a JSON-safe su
 See [Unified Signal Engine](unified-signal-engine.md) for the schema and future
 connector mapping rules.
 
+## Reddit Intelligence
+
+Reddit Intelligence v1 implements Connector SDK v2 through an OAuth-only official
+Data API provider. It is disabled by default and has no Beat schedule. See the
+[Reddit connector guide](reddit-connector.md) for configuration, supported post
+search modes, privacy/retention responsibilities, and limitations.
+
 ## Testing Strategy
 
 - Registry resolution
