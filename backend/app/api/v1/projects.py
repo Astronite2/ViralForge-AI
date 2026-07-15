@@ -5,15 +5,19 @@ from sqlalchemy.orm import Session
 
 from backend.app.core.config import settings
 from backend.app.dependencies.database import get_db
+from backend.app.models.production_brief import ProjectProductionBriefModel
 from backend.app.models.project import ProjectModel
 from backend.app.models.research import ProjectResearchDossierModel
+from backend.app.research.gap_analyzer import ResearchGapAnalyzer
 from backend.app.schemas.project import ProjectCreate, ProjectRead, ProjectStatus
 from backend.app.schemas.research import (
     ResearchDossierRead,
+    ResearchExpansionRequest,
+    ResearchGapsRead,
     ResearchStartRead,
     ResearchStatusRead,
 )
-from backend.app.workers.tasks import run_project_research
+from backend.app.workers.tasks import expand_project_research, run_project_research
 
 router = APIRouter(prefix="/api/v1/projects", tags=["projects"])
 
@@ -149,3 +153,62 @@ def approve_research(
         generated_at=dossier.generated_at,
         dossier=dossier.payload,
     )
+
+
+@router.get("/{project_id}/research/gaps", response_model=ResearchGapsRead)
+def research_gaps(project_id: str, db: Session = Depends(get_db)) -> ResearchGapsRead:
+    project, dossier = _research(project_id, db)
+    brief = (
+        db.query(ProjectProductionBriefModel)
+        .filter_by(project_id=project_id)
+        .one_or_none()
+    )
+    if brief is None:
+        raise HTTPException(
+            status_code=409, detail="Production Brief is required for gap analysis"
+        )
+    duration = int(
+        "".join(character for character in project.target_length if character.isdigit())
+        or 15
+    )
+    result = ResearchGapAnalyzer().analyze(
+        topic=project.title,
+        dossier=dossier.payload,
+        brief=brief.payload,
+        target_duration=duration,
+    )
+    return ResearchGapsRead(
+        **{key: value for key, value in result.items() if key != "coverage"}
+    )
+
+
+@router.post("/{project_id}/research/expand", response_model=ResearchStartRead)
+def expand_research(
+    project_id: str, payload: ResearchExpansionRequest, db: Session = Depends(get_db)
+) -> ResearchStartRead:
+    project, dossier = _research(project_id, db)
+    if dossier.research_status != "APPROVED":
+        raise HTTPException(
+            status_code=409, detail="Approved research is required for expansion"
+        )
+    brief = (
+        db.query(ProjectProductionBriefModel)
+        .filter_by(project_id=project_id)
+        .one_or_none()
+    )
+    if brief is None:
+        raise HTTPException(
+            status_code=409, detail="Production Brief is required for gap analysis"
+        )
+    dossier.research_status = "RUNNING"
+    dossier.current_step = "ANALYZING_GAPS"
+    dossier.progress = 10
+    dossier.completed_at = None
+    db.commit()
+    task = expand_project_research.delay(
+        project_id,
+        payload.focus_areas,
+        payload.target_duration_minutes,
+        payload.max_additional_sources,
+    )
+    return ResearchStartRead(project_id=project_id, task_id=task.id, status="RUNNING")

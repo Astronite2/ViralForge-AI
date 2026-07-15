@@ -161,6 +161,10 @@ class Settings(BaseSettings):
     research_max_retries: int = Field(default=1, ge=0, le=5)
     research_version: str = "research-v1"
     production_brief_version: str = "producer-v1"
+    script_version: str = "script-v1"
+    script_words_per_minute: int = Field(default=145, ge=100, le=220)
+    script_word_count_tolerance: float = Field(default=0.10, ge=0.0, le=0.5)
+    script_allow_limited_evidence: bool = False
 
     model_config = SettingsConfigDict(
         env_file=".env", env_file_encoding="utf-8", extra="ignore"

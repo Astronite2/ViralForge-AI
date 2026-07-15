@@ -10,6 +10,8 @@ from backend.app.dependencies.database import get_db
 from backend.app.models.production_brief import ProjectProductionBriefModel
 from backend.app.models.project import ProjectModel
 from backend.app.models.research import ProjectResearchDossierModel
+from backend.app.models.script import ProjectScriptModel
+from backend.app.research.expansion_service import next_version
 from backend.app.schemas.production_brief import (
     ProductionBriefRead,
     ProductionBriefStartRead,
@@ -70,6 +72,7 @@ def start(project_id: str, db: Session = Depends(get_db)) -> ProductionBriefStar
             current_step="INITIALIZING",
             candidate_angles_generated=0,
             payload={},
+            research_version_used=dossier.research_version,
         )
     )
     db.commit()
@@ -103,7 +106,13 @@ def get_status(
 @router.get("", response_model=ProductionBriefRead)
 def get_brief(project_id: str, db: Session = Depends(get_db)) -> ProductionBriefRead:
     brief = _brief(project_id, db)
-    if brief.status not in {"COMPLETE", "NEEDS_REVIEW", "APPROVED", "REJECTED"}:
+    if brief.status not in {
+        "COMPLETE",
+        "NEEDS_REVIEW",
+        "APPROVED",
+        "REJECTED",
+        "STALE",
+    }:
         raise HTTPException(status_code=409, detail="Production brief is not complete")
     return ProductionBriefRead(
         project_id=project_id,
@@ -119,7 +128,16 @@ def get_brief(project_id: str, db: Session = Depends(get_db)) -> ProductionBrief
 def approve(project_id: str, db: Session = Depends(get_db)) -> ProductionBriefRead:
     project = _project(project_id, db)
     brief = _brief(project_id, db)
-    if brief.status not in {"COMPLETE", "NEEDS_REVIEW"}:
+    dossier = (
+        db.query(ProjectResearchDossierModel)
+        .filter_by(project_id=project_id)
+        .one_or_none()
+    )
+    if (
+        brief.status not in {"COMPLETE", "NEEDS_REVIEW"}
+        or dossier is None
+        or brief.research_version_used != dossier.research_version
+    ):
         raise HTTPException(
             status_code=409, detail="Production brief is not ready for approval"
         )
@@ -134,6 +152,39 @@ def approve(project_id: str, db: Session = Depends(get_db)) -> ProductionBriefRe
         generated_at=brief.generated_at,
         approved_at=brief.approved_at,
         brief=brief.payload,
+    )
+
+
+@router.post("/regenerate", response_model=ProductionBriefStartRead)
+def regenerate(
+    project_id: str, db: Session = Depends(get_db)
+) -> ProductionBriefStartRead:
+    project = _project(project_id, db)
+    brief = _brief(project_id, db)
+    dossier = (
+        db.query(ProjectResearchDossierModel)
+        .filter_by(project_id=project_id)
+        .one_or_none()
+    )
+    script = db.query(ProjectScriptModel).filter_by(project_id=project_id).one_or_none()
+    if dossier is None or dossier.research_status != "APPROVED":
+        raise HTTPException(409, "Approved expanded research is required")
+    if script is not None and script.status in {"PENDING", "GENERATING"}:
+        raise HTTPException(409, "Script generation is currently running")
+    brief.version = next_version(brief.version, "brief")
+    brief.status = "PENDING"
+    brief.current_step = "INITIALIZING"
+    brief.payload = {}
+    brief.approved_at = None
+    brief.research_version_used = dossier.research_version
+    if script is not None:
+        script.status = "STALE"
+        script.approved_at = None
+    project.status = "PRODUCING_BRIEF"
+    db.commit()
+    task = run_executive_producer.delay(project_id)
+    return ProductionBriefStartRead(
+        project_id=project_id, task_id=task.id, status="PENDING"
     )
 
 

@@ -7,6 +7,8 @@ production effort and evidence confidence.
 ViralForge Studio carries approved, source-grounded research into an Executive
 Producer review that selects a defensible angle, production structure, evidence,
 visual direction, and risks before script writing is unlocked.
+The Script Writer then enforces duration-aware evidence sufficiency and produces
+citation-mapped narration only when the approved evidence can support it.
 
 [![CI](https://github.com/Astronite2/ViralForge-AI/actions/workflows/ci.yml/badge.svg)](https://github.com/Astronite2/ViralForge-AI/actions/workflows/ci.yml)
 
@@ -206,3 +208,7 @@ python -m backend.scripts.demo_intelligence_flow --database-mode isolated
 3. Put use-case orchestration in services, persistence in repositories, and infrastructure-independent concepts in domain objects.
 4. Add platform integrations through `BaseConnector`; background entry points belong in `workers/tasks.py`.
 5. Run format, lint, and tests before opening a pull request. GitHub Actions repeats these checks and builds the Docker image.
+
+## Evidence recovery
+
+When the Script Writer finds insufficient evidence, ViralForge can run a focused, versioned research expansion. Expanded research invalidates stale Production Brief and Script approvals; each downstream artifact records its upstream versions. Thresholds remain unchanged and failed expansion preserves the prior approved dossier. See [Research expansion](docs/research-expansion.md).

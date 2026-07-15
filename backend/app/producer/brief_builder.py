@@ -14,7 +14,14 @@ class BriefBuilder:
         selected: dict[str, Any],
         viability: dict[str, Any],
     ) -> dict[str, Any]:
-        fact_ids = selected["supporting_fact_ids"]
+        # A production angle controls framing, not evidence starvation. Select the
+        # dossier's complete verified evidence set so long-form coverage can be
+        # evaluated honestly downstream.
+        fact_ids = sorted(
+            fact["id"]
+            for fact in self._facts(dossier)
+            if fact.get("verification_status") != "UNVERIFIED"
+        )
         source_ids = sorted(
             {
                 sid
@@ -134,6 +141,7 @@ class BriefBuilder:
                 )
             ),
             "research_version": dossier.get("research_version"),
+            "research_version_used": dossier.get("research_version"),
             "evidence_boundary": "Only facts and sources from the approved dossier were selected.",
         }
 

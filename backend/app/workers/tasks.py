@@ -18,7 +18,9 @@ from backend.app.reasoning.errors import (
     ReasoningTransientProviderError,
     ReasoningValidationError,
 )
+from backend.app.research.expansion_service import ResearchExpansionService
 from backend.app.research.service import ProjectResearchService
+from backend.app.script.service import ProjectScriptService
 from backend.app.services.connector_orchestrator import ConnectorOrchestrator
 from backend.app.services.reasoning import ReasoningService
 from backend.app.services.signal_decision import SignalDecisionService
@@ -26,6 +28,42 @@ from backend.app.utils.events import SignalDetected
 from backend.app.workers.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
+
+
+@celery_app.task(name="backend.app.workers.tasks.expand_project_research")
+def expand_project_research(
+    project_id: str,
+    focus_areas: list[str] | None = None,
+    target_duration: int = 15,
+    max_additional_sources: int = 25,
+) -> dict[str, object]:
+    """Expand an existing dossier using focused, documented source providers."""
+    try:
+        with SessionLocal() as session:
+            return ResearchExpansionService(session).run(
+                project_id,
+                focus_areas=focus_areas,
+                target_duration=target_duration,
+                max_additional_sources=max_additional_sources,
+            )
+    except Exception:
+        logger.exception(
+            "Project research expansion failed", extra={"project_id": project_id}
+        )
+        return {"project_id": project_id, "research_status": "EXPANSION_FAILED"}
+
+
+@celery_app.task(name="backend.app.workers.tasks.run_project_script")
+def run_project_script(project_id: str) -> dict[str, object]:
+    """Generate or gate one source-grounded documentary script."""
+    try:
+        with SessionLocal() as session:
+            return ProjectScriptService(session).run(project_id)
+    except Exception:
+        logger.exception(
+            "Project Script Writer failed", extra={"project_id": project_id}
+        )
+        return {"project_id": project_id, "script_status": "FAILED"}
 
 
 @celery_app.task(name="backend.app.workers.tasks.run_executive_producer")

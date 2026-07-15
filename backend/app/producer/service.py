@@ -85,6 +85,7 @@ class ExecutiveProducerService:
             brief.revised_money_score = viability["revised_money_score"]
             brief.revised_confidence = viability["revised_confidence"]
             brief.payload = payload
+            brief.research_version_used = dossier_model.research_version
             brief.generated_at = datetime.now(UTC)
             brief.completed_at = datetime.now(UTC)
             project.status = "PROJECT_REJECTED" if rejected else "BRIEF_COMPLETE"
@@ -118,6 +119,7 @@ class ExecutiveProducerService:
                 current_step="INITIALIZING",
                 candidate_angles_generated=0,
                 payload={},
+                research_version_used=None,
             )
             self.session.add(brief)
             self.session.commit()

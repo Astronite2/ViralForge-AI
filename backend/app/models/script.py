@@ -1,4 +1,4 @@
-"""Persistent Executive Producer output."""
+"""Persistent source-grounded documentary script."""
 
 from datetime import datetime
 from typing import Any
@@ -11,8 +11,8 @@ from backend.app.db.base import Base
 from backend.app.models.base import TimestampMixin
 
 
-class ProjectProductionBriefModel(TimestampMixin, Base):
-    __tablename__ = "project_production_briefs"
+class ProjectScriptModel(TimestampMixin, Base):
+    __tablename__ = "project_scripts"
 
     id: Mapped[str] = mapped_column(
         String(36), primary_key=True, default=lambda: str(uuid4())
@@ -23,12 +23,16 @@ class ProjectProductionBriefModel(TimestampMixin, Base):
     status: Mapped[str] = mapped_column(String(32), index=True)
     version: Mapped[str] = mapped_column(String(32))
     research_version_used: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    production_brief_version_used: Mapped[str | None] = mapped_column(
+        String(32), nullable=True
+    )
     current_step: Mapped[str] = mapped_column(String(40))
-    candidate_angles_generated: Mapped[int] = mapped_column(Integer, default=0)
-    selected_angle: Mapped[str | None] = mapped_column(String(500), nullable=True)
-    recommendation: Mapped[str | None] = mapped_column(String(40), nullable=True)
-    revised_money_score: Mapped[float | None] = mapped_column(Float, nullable=True)
-    revised_confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
+    target_word_count: Mapped[int] = mapped_column(Integer, default=0)
+    actual_word_count: Mapped[int] = mapped_column(Integer, default=0)
+    estimated_duration_minutes: Mapped[float | None] = mapped_column(
+        Float, nullable=True
+    )
+    evidence_sufficiency: Mapped[str | None] = mapped_column(String(20), nullable=True)
     payload: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
     safe_error_message: Mapped[str | None] = mapped_column(String(1000), nullable=True)
     started_at: Mapped[datetime | None] = mapped_column(

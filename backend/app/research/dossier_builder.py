@@ -16,16 +16,25 @@ class DossierBuilder:
             excerpt = str(source.get("excerpt", "")).strip()
             if not excerpt:
                 continue
+            quality = str(source.get("source_quality", "LOW_CONFIDENCE"))
+            verification = (
+                "SUPPORTED"
+                if quality in {"PRIMARY", "AUTHORITATIVE"}
+                else "PARTIALLY_SUPPORTED"
+            )
             candidate = {
                 "claim": excerpt,
                 "supporting_source_ids": [source["id"]],
                 "confidence": round(
                     0.45 + float(source.get("relevance", 0.5)) * 0.35, 2
                 ),
-                "verification_status": "SUPPORTED",
+                "verification_status": verification,
                 "notes": (
-                    "Short source excerpt; verify against the full linked source "
-                    "before scripting."
+                    "Authoritative source excerpt; verify against the full linked "
+                    "source before scripting."
+                    if verification == "SUPPORTED"
+                    else "Search metadata or excerpt is an evidence lead, not full "
+                    "verification; review the linked source before scripting."
                 ),
             }
             validated = validate_fact(candidate, source_ids)
