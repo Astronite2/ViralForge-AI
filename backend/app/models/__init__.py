@@ -27,6 +27,7 @@ from backend.app.models.reasoning import (
     ReasoningSourceLinkModel,
     ReasoningValidationErrorModel,
 )
+from backend.app.models.research import ProjectResearchDossierModel
 from backend.app.models.topic import Topic
 from backend.app.models.topic_relationship import TopicRelationshipModel
 from backend.app.models.trend_signal import TrendSignalModel
@@ -54,6 +55,7 @@ __all__ = [
     "ProcessedEventModel",
     "ProductionBriefModel",
     "ProjectModel",
+    "ProjectResearchDossierModel",
     "ReasoningResultModel",
     "ReasoningRunModel",
     "ReasoningSourceLinkModel",

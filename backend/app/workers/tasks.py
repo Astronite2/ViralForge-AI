@@ -17,6 +17,7 @@ from backend.app.reasoning.errors import (
     ReasoningTransientProviderError,
     ReasoningValidationError,
 )
+from backend.app.research.service import ProjectResearchService
 from backend.app.services.connector_orchestrator import ConnectorOrchestrator
 from backend.app.services.reasoning import ReasoningService
 from backend.app.services.signal_decision import SignalDecisionService
@@ -24,6 +25,20 @@ from backend.app.utils.events import SignalDetected
 from backend.app.workers.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
+
+
+@celery_app.task(
+    name="backend.app.workers.tasks.run_project_research",
+    max_retries=settings.research_max_retries,
+)
+def run_project_research(project_id: str) -> dict[str, object]:
+    """Build and persist one source-grounded project dossier."""
+    try:
+        with SessionLocal() as session:
+            return ProjectResearchService(session).run(project_id)
+    except Exception:
+        logger.exception("Project research failed", extra={"project_id": project_id})
+        return {"project_id": project_id, "research_status": "FAILED"}
 
 
 @celery_app.task(

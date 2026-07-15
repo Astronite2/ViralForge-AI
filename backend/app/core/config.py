@@ -151,6 +151,15 @@ class Settings(BaseSettings):
             "general": (1.0, 3.0, 6.0),
         }
     )
+    research_search_provider: str = "met_crossref_wikipedia"
+    research_search_api_url: str | None = None
+    research_search_api_key: str | None = None
+    research_max_search_queries: int = Field(default=12, ge=1, le=30)
+    research_max_sources: int = Field(default=30, ge=1, le=100)
+    research_min_authoritative_sources: int = Field(default=3, ge=0, le=30)
+    research_timeout_seconds: float = Field(default=180.0, gt=0.0, le=600.0)
+    research_max_retries: int = Field(default=1, ge=0, le=5)
+    research_version: str = "research-v1"
 
     model_config = SettingsConfigDict(
         env_file=".env", env_file_encoding="utf-8", extra="ignore"

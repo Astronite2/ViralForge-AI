@@ -12,7 +12,11 @@ def _client(session):
     return TestClient(app)
 
 
-def test_create_get_and_start_research(session) -> None:
+def test_create_get_and_start_research(session, monkeypatch) -> None:
+    monkeypatch.setattr(
+        "backend.app.api.v1.projects.run_project_research.delay",
+        lambda _id: type("Task", (), {"id": "task-1"})(),
+    )
     client = _client(session)
     response = client.post(
         "/api/v1/projects",
@@ -30,10 +34,18 @@ def test_create_get_and_start_research(session) -> None:
     assert client.get(f"/api/v1/projects/{project['id']}").json() == project
     started = client.post(f"/api/v1/projects/{project['id']}/research/start")
     assert started.status_code == 200
-    assert started.json()["status"] == "RESEARCHING"
+    assert started.json() == {
+        "project_id": project["id"],
+        "task_id": "task-1",
+        "status": "PENDING",
+    }
 
 
-def test_project_validation_and_transition_guards(session) -> None:
+def test_project_validation_and_transition_guards(session, monkeypatch) -> None:
+    monkeypatch.setattr(
+        "backend.app.api.v1.projects.run_project_research.delay",
+        lambda _id: type("Task", (), {"id": "task-1"})(),
+    )
     client = _client(session)
     assert client.post("/api/v1/projects", json={}).status_code == 422
     assert client.get("/api/v1/projects/missing").status_code == 404
