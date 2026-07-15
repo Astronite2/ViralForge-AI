@@ -4,9 +4,15 @@ ViralForge helps creators decide what YouTube video to produce next by ranking
 opportunities according to expected revenue potential, competition, longevity,
 production effort and evidence confidence.
 
+ViralForge Studio carries approved, source-grounded research into an Executive
+Producer review that selects a defensible angle, production structure, evidence,
+visual direction, and risks before script writing is unlocked.
+
 [![CI](https://github.com/Astronite2/ViralForge-AI/actions/workflows/ci.yml/badge.svg)](https://github.com/Astronite2/ViralForge-AI/actions/workflows/ci.yml)
 
-ViralForge AI is a Content Intelligence Platform foundation designed for high-volume platform collection, event-driven processing, background work, and future AI-assisted analysis. This repository intentionally provides architecture only; it contains no product business logic, authentication implementation, or AI workflows.
+ViralForge AI combines its intelligence infrastructure with a working creator
+production workspace. Projects progress through research and production-brief
+approval while retaining evidence traceability and deterministic decisions.
 
 Phase 5 adds the production Intelligence Dashboard in [`frontend/`](frontend/README.md). The read-only React application exposes the existing intelligence stack as a dark, responsive decision workspace without changing backend architecture or API contracts.
 

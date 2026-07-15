@@ -160,6 +160,7 @@ class Settings(BaseSettings):
     research_timeout_seconds: float = Field(default=180.0, gt=0.0, le=600.0)
     research_max_retries: int = Field(default=1, ge=0, le=5)
     research_version: str = "research-v1"
+    production_brief_version: str = "producer-v1"
 
     model_config = SettingsConfigDict(
         env_file=".env", env_file_encoding="utf-8", extra="ignore"

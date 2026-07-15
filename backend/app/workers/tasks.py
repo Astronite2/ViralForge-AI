@@ -11,6 +11,7 @@ from backend.app.connectors.registry import build_default_connector_registry
 from backend.app.core.config import settings
 from backend.app.db.session import SessionLocal
 from backend.app.domain.reasoning import ReasoningType
+from backend.app.producer.service import ExecutiveProducerService
 from backend.app.reasoning.errors import (
     ReasoningConfigurationError,
     ReasoningDisabledError,
@@ -25,6 +26,17 @@ from backend.app.utils.events import SignalDetected
 from backend.app.workers.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
+
+
+@celery_app.task(name="backend.app.workers.tasks.run_executive_producer")
+def run_executive_producer(project_id: str) -> dict[str, object]:
+    """Generate one validated production brief from approved research."""
+    try:
+        with SessionLocal() as session:
+            return ExecutiveProducerService(session).run(project_id)
+    except Exception:
+        logger.exception("Executive Producer failed", extra={"project_id": project_id})
+        return {"project_id": project_id, "brief_status": "FAILED"}
 
 
 @celery_app.task(

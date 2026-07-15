@@ -20,6 +20,7 @@ from backend.app.models.opportunity import Opportunity, OpportunityModel
 from backend.app.models.opportunity_score import OpportunityScoreModel
 from backend.app.models.platform import Platform
 from backend.app.models.processed_event import ProcessedEventModel
+from backend.app.models.production_brief import ProjectProductionBriefModel
 from backend.app.models.project import ProjectModel
 from backend.app.models.reasoning import (
     ReasoningResultModel,
@@ -53,6 +54,7 @@ __all__ = [
     "OpportunityScoreModel",
     "Platform",
     "ProcessedEventModel",
+    "ProjectProductionBriefModel",
     "ProductionBriefModel",
     "ProjectModel",
     "ProjectResearchDossierModel",
